@@ -1,95 +1,132 @@
-import json
-from datetime import datetime
 import streamlit as st
 from market import get_timeframes
 from strategy_mobile import analyze, trade_plan
+import json
+from pathlib import Path
+from datetime import datetime
 
-st.set_page_config(page_title="Trading Signal V3", page_icon="📈",
-                   layout="centered", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="Trading Signal V3.1", page_icon="📈", layout="centered")
 
 st.markdown("""
 <style>
-#MainMenu, footer, header {visibility:hidden;}
-.block-container {max-width:480px;padding:0.8rem 1rem 3rem;}
-h1 {font-size:1.65rem!important;margin-bottom:.2rem!important;}
-.signal {padding:24px 12px;border-radius:22px;text-align:center;margin:10px 0 8px;
-font-size:2rem;font-weight:800;border:1px solid rgba(128,128,128,.25);}
-.buy {background:rgba(0,180,90,.12)} .sell {background:rgba(230,70,70,.12)}
-.wait {background:rgba(128,128,128,.10)}
-.quality {text-align:center;font-size:1.05rem;font-weight:700;margin-bottom:14px;}
-.status {border:1px solid rgba(128,128,128,.20);border-radius:16px;padding:12px 14px;
-margin:7px 0;font-size:1.02rem;}
-[data-testid="stMetricValue"] {font-size:1.35rem;}
-.stButton button {height:3rem;border-radius:14px;font-weight:700;}
+.block-container {max-width:480px; padding-top:1.2rem; padding-bottom:2rem;}
+.signal {
+    border:1px solid #ddd; border-radius:24px; padding:28px 12px;
+    text-align:center; font-size:2.15rem; font-weight:800; margin:18px 0 12px 0;
+}
+.card {border:1px solid #ddd; border-radius:18px; padding:16px; margin:12px 0;}
+.small {opacity:.72; font-size:.92rem;}
 </style>
 """, unsafe_allow_html=True)
 
-with open("config.json","r",encoding="utf-8") as f:
-    cfg=json.load(f)
+cfg_path = Path(__file__).with_name("config.json")
+with open(cfg_path, "r", encoding="utf-8") as f:
+    cfg = json.load(f)
 
-st.title("📈 Trading Signal V3")
-st.caption("M15 tendencia · M5 confirma · M1 entrada · filtros V3")
+st.title("📈 Trading Signal V3.1")
+st.caption("M15 tendencia · M5 confirmación · M1 gatillo · filtros de calidad")
 
-symbols={"Bitcoin · BTC/USD":"BTC-USD","Ethereum · ETH/USD":"ETH-USD",
-         "EUR/USD":"EURUSD=X","Apple · AAPL":"AAPL","Microsoft · MSFT":"MSFT"}
-choice=st.selectbox("Activo",list(symbols.keys()))
-symbol=symbols[choice]
+assets = {
+    "Bitcoin · BTC/USD": "BTC-USD",
+    "Ethereum · ETH/USD": "ETH-USD",
+    "EUR/USD": "EURUSD=X",
+    "Apple · AAPL": "AAPL",
+    "Microsoft · MSFT": "MSFT",
+}
+asset_name = st.selectbox("Activo", list(assets.keys()))
+symbol = assets[asset_name]
 
 with st.expander("⚙️ Ajustes de riesgo"):
-    balance=st.number_input("Capital de referencia",min_value=1.0,value=float(cfg["account_balance"]))
-    risk=st.number_input("Riesgo máximo (%)",min_value=0.1,max_value=2.0,
-                         value=float(cfg["risk_per_trade_pct"]),step=0.1)
-    sl=st.number_input("Stop (%)",min_value=0.1,value=float(cfg["stop_loss_pct"]),step=0.1)
-    tp=st.number_input("Objetivo (%)",min_value=0.1,value=float(cfg["take_profit_pct"]),step=0.1)
+    balance = st.number_input("Capital de referencia", min_value=1.0, value=float(cfg.get("balance", 1000)))
+    risk_pct = st.number_input("Riesgo máximo por operación (%)", min_value=0.1, max_value=10.0,
+                               value=float(cfg.get("risk_pct", 1.0)), step=0.1)
+    sl_pct = st.number_input("Stop Loss (%)", min_value=0.1, max_value=20.0,
+                             value=float(cfg.get("sl_pct", 1.0)), step=0.1)
+    tp_pct = st.number_input("Take Profit (%)", min_value=0.1, max_value=50.0,
+                             value=float(cfg.get("tp_pct", 2.0)), step=0.1)
 
-st.button("🔄 ACTUALIZAR",use_container_width=True)
+st.button("🔄 ACTUALIZAR", use_container_width=True)
 
 try:
-    with st.spinner("Analizando..."):
-        tfs=get_timeframes(symbol)
-        result=analyze(tfs,cfg)
-        price=float(tfs["M1"]["Close"].iloc[-1])
+    tfs = get_timeframes(symbol)
+    result = analyze(tfs, cfg)
 
-    css={"BUY":"buy","SELL":"sell","WAIT":"wait"}[result["signal"]]
-    label={"BUY":"🟢 COMPRAR","SELL":"🔴 VENDER","WAIT":"⚪ ESPERAR"}[result["signal"]]
-    st.markdown(f'<div class="signal {css}">{label}</div>',unsafe_allow_html=True)
+    score = int(result.get("score", 0))
+    raw_side = result.get("side", "WAIT")
+    quality = result.get("quality", "BAJA")
 
-    q=result["quality"] if result["score"]==3 else "—"
-    st.markdown(f'<div class="quality">Calidad técnica: {q}</div>',unsafe_allow_html=True)
+    # Señal principal: nunca mostrar COMPRAR/VENDER si no existe entrada completa válida.
+    operative = raw_side if score == 3 and raw_side in ("BUY", "SELL") and quality != "BAJA" else "WAIT"
 
-    c1,c2=st.columns(2)
-    c1.metric("Precio externo",f"{price:,.4f}")
-    c2.metric("Reglas",f'{result["score"]}/3')
-
-    st.markdown(f'<div class="status"><b>M15 · Tendencia</b><br>{result["trend_text"]}</div>',
-                unsafe_allow_html=True)
-    st.markdown(f'<div class="status"><b>M5 · Confirmación</b><br>{"✅ Confirmada" if result["confirm"] else "⏳ Pendiente"}</div>',
-                unsafe_allow_html=True)
-    st.markdown(f'<div class="status"><b>M1 · Entrada</b><br>{"✅ Activada" if result["trigger"] else "⏳ Pendiente"}</div>',
-                unsafe_allow_html=True)
-
-    plan=trade_plan(price,result["signal"],balance,risk,sl,tp)
-    if plan:
-        st.markdown("### Plan")
-        a,b=st.columns(2)
-        a.metric("Entrada ref.",f'{plan["entry"]:,.4f}')
-        b.metric("STOP",f'{plan["stop"]:,.4f}')
-        a.metric("OBJETIVO",f'{plan["target"]:,.4f}')
-        b.metric("Riesgo máx.",f'{plan["risk_cash"]:,.2f}')
-        st.success("Señal V3 válida. Comprueba el precio en Quantfury y decide tú.")
+    if operative == "BUY":
+        label, icon = "COMPRAR", "🟢"
+    elif operative == "SELL":
+        label, icon = "VENDER", "🔴"
     else:
-        st.info(result["reason"])
+        label, icon = "ESPERAR", "🟡"
+
+    st.markdown(f'<div class="signal">{icon} {label}</div>', unsafe_allow_html=True)
+
+    if score == 3:
+        st.markdown(f"### Calidad técnica: {quality}")
+    else:
+        st.markdown("### Calidad técnica: —")
+
+    price = float(result.get("price", tfs["M1"]["Close"].iloc[-1]))
+    c1, c2 = st.columns(2)
+    c1.metric("Precio externo", f"{price:,.4f}")
+    c2.metric("Reglas", f"{score}/3")
+
+    direction = result.get("direction", result.get("trend", "WAIT"))
+    trend_ok = bool(result.get("trend_ok", score >= 1))
+    confirm_ok = bool(result.get("confirm_ok", False))
+    trigger_ok = bool(result.get("trigger_ok", False))
+
+    dir_txt = {"BUY":"Compradora", "SELL":"Vendedora", "WAIT":"Sin tendencia clara"}.get(direction, str(direction))
+    st.markdown(f'<div class="card"><b>M15 · Tendencia</b><br>{"✅" if trend_ok else "⏳"} {dir_txt}</div>',
+                unsafe_allow_html=True)
+    st.markdown(f'<div class="card"><b>M5 · Confirmación</b><br>{"✅ Confirmada" if confirm_ok else "⏳ Pendiente"}</div>',
+                unsafe_allow_html=True)
+    st.markdown(f'<div class="card"><b>M1 · Gatillo de entrada</b><br>{"✅ Activado" if trigger_ok else "⏳ Pendiente"}</div>',
+                unsafe_allow_html=True)
+
+    if operative in ("BUY", "SELL"):
+        plan = trade_plan(price, operative, balance, risk_pct, sl_pct, tp_pct)
+        st.success("Señal completa 3/3 y filtros técnicos aceptados.")
+        a, b = st.columns(2)
+        a.metric("Entrada ref.", f"{plan['entry']:,.4f}")
+        b.metric("Riesgo máx.", f"{plan['max_risk_cash']:,.2f}")
+        a.metric("Stop Loss", f"{plan['stop']:,.4f}")
+        b.metric("Take Profit", f"{plan['target']:,.4f}")
+        rr = tp_pct / sl_pct if sl_pct else 0
+        st.metric("Riesgo / beneficio", f"1 : {rr:.2f}")
+    else:
+        missing = []
+        if not trend_ok: missing.append("tendencia M15")
+        if not confirm_ok: missing.append("confirmación M5")
+        if not trigger_ok: missing.append("gatillo M1")
+        if score == 3 and quality == "BAJA":
+            missing.append("filtros de calidad")
+        msg = " · ".join(missing) if missing else "faltan condiciones de entrada"
+        st.info(f"Sin operación: {msg}.")
+        if direction in ("BUY", "SELL"):
+            st.caption("Sesgo técnico actual: " + ("comprador" if direction == "BUY" else "vendedor") +
+                       ". No es una orden de entrada.")
 
     with st.expander("🔎 ¿Por qué esta señal?"):
-        st.write("Los filtros V3 valoran RSI, impulso, separación de medias y volatilidad.")
-        for name,ok in result["filters"].items():
-            st.write(("✅ " if ok else "⚠️ ")+name)
-        st.caption("ALTA/MEDIA/BAJA clasifica condiciones técnicas; no es una probabilidad de ganar.")
-        st.caption(f'RSI M5 {result["rsi5"]:.1f} · separación EMA {result["ema_sep"]:.3f}% · ATR M5 {result["atr_pct"]:.3f}%')
+        st.write(result.get("reason", ""))
+        filters = result.get("filters", {})
+        if filters:
+            for name, passed in filters.items():
+                st.write(("✅ " if passed else "❌ ") + str(name))
+        metrics = result.get("metrics", {})
+        if metrics:
+            st.write(metrics)
+        st.caption("ALTA/MEDIA/BAJA clasifica las condiciones técnicas; no es una probabilidad de beneficio.")
 
-    st.caption("Última consulta: "+datetime.now().strftime("%H:%M:%S"))
-    st.caption("No conecta con Quantfury ni envía órdenes. El precio externo puede diferir del ejecutable.")
+    st.caption("Última consulta: " + datetime.now().strftime("%H:%M:%S"))
+    st.caption("No conecta con Quantfury ni envía órdenes. El precio externo puede diferir del precio de ejecución.")
+
 except Exception as e:
-    st.error("No he podido obtener los datos ahora.")
-    with st.expander("Detalle técnico"):
-        st.code(str(e))
+    st.error("No se pudieron obtener o analizar los datos.")
+    st.exception(e)
