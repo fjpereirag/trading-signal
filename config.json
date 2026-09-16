@@ -1,0 +1,13 @@
+{
+  "symbol": "BTC-USD",
+  "risk_per_trade_pct": 0.5,
+  "account_balance": 10000,
+  "stop_loss_pct": 0.6,
+  "take_profit_pct": 1.2,
+  "stoch_k": 14,
+  "stoch_d": 3,
+  "oversold": 20,
+  "overbought": 80,
+  "ema_fast": 200,
+  "ema_slow": 365
+}

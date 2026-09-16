@@ -1,0 +1,13 @@
+IMPORTANTE
+Los nombres deben permanecer exactamente así:
+app.py
+market.py
+requirements.txt
+strategy_mobile.py
+strategy.py
+backtest.py
+config.json
+README_WEBAPP.md
+.streamlit/config.toml
+
+Si el gestor de archivos del móvil traduce los nombres, cancela la subida.
