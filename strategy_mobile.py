@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def indicators(df, cfg):
     x = df.copy()
     lo = x["Low"].rolling(cfg["stoch_k"]).min()
