@@ -4,6 +4,20 @@ from strategy_mobile import analyze, trade_plan
 import json
 from pathlib import Path
 from datetime import datetime
+import requests
+
+def get_telegram_chat_id():
+    try:
+        token = st.secrets["TELEGRAM_BOT_TOKEN"]
+        url = f"https://api.telegram.org/bot{token}/getUpdates"
+        data = requests.get(url, timeout=10).json()
+
+        if data.get("ok") and data.get("result"):
+            return data["result"][-1]["message"]["chat"]["id"]
+    except Exception:
+        pass
+
+    return None
 
 st.set_page_config(page_title="Trading Signal V3.1", page_icon="📈", layout="centered")
 
@@ -130,3 +144,10 @@ try:
 except Exception as e:
     st.error("No se pudieron obtener o analizar los datos.")
     st.exception(e)
+
+chat_id = get_telegram_chat_id()
+
+if chat_id:
+    st.success(f"Telegram conectado · Chat ID: {chat_id}")
+else:
+    st.warning("Telegram todavía no conectado. Envía /start al bot.")
