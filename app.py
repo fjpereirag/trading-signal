@@ -6,6 +6,7 @@ from pathlib import Path
 from datetime import datetime
 import requests
 
+
 def get_telegram_chat_id():
     try:
         token = st.secrets["TELEGRAM_BOT_TOKEN"]
