@@ -1,6 +1,7 @@
 import os
 import json
 import requests
+from datetime import datetime, timezone
 
 
 from market import get_timeframes
@@ -45,6 +46,34 @@ def main():
             "Este es un mensaje de prueba; no se ha realizado ninguna operación."
         )
         print("Mensaje de prueba enviado al chat configurado.")
+        return
+
+    if os.environ.get("REPORT_TELEGRAM", "").lower() == "true":
+        with open("config.json", "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+        lines = [
+            "📊 Trading Signal V4 · consulta puntual",
+            datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC"),
+            "Precios externos de Yahoo Finance; no son precios ejecutables en Quantfury.",
+        ]
+        for name, ticker in (("XRP", "XRP-USD"), ("BTC", "BTC-USD")):
+            try:
+                result = analyze(get_timeframes(ticker), cfg)
+                lines.append(
+                    f"{name}: {result['price']:.4f} USD · "
+                    f"contexto {result['context']} · zona {result['zone']} · "
+                    f"reglas {result['score']}/3 · acción simulada "
+                    f"{result['action'].replace('_', ' ')}"
+                )
+            except Exception as exc:
+                print(f"Error consultando {name}: {exc}")
+                lines.append(f"{name}: datos no disponibles en esta consulta.")
+        lines.append(
+            "La cuenta de Quantfury no está conectada; sus cifras manuales pueden haber cambiado. "
+            "Sin órdenes ni recomendación automática."
+        )
+        send_telegram("\n".join(lines))
+        print("Informe puntual enviado al chat configurado.")
         return
 
     with open("config.json", "r", encoding="utf-8") as f:
