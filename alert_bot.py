@@ -4,7 +4,7 @@ import requests
 
 
 from market import get_timeframes
-from strategy_mobile import analyze, trade_plan
+from strategy_mobile import analyze
 
 
 TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -39,6 +39,14 @@ def send_telegram(message):
 
 
 def main():
+    if os.environ.get("TEST_TELEGRAM", "").lower() == "true":
+        send_telegram(
+            "✅ Prueba de conexión de Trading Signal V4. "
+            "Este es un mensaje de prueba; no se ha realizado ninguna operación."
+        )
+        print("Mensaje de prueba enviado al chat configurado.")
+        return
+
     with open("config.json", "r", encoding="utf-8") as f:
         cfg = json.load(f)
 
