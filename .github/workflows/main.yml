@@ -4,6 +4,12 @@ on:
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch:
+    inputs:
+      test_telegram:
+        description: "Enviar un único mensaje de prueba al chat configurado"
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   check-signal:
@@ -25,4 +31,5 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TEST_TELEGRAM: ${{ inputs.test_telegram }}
         run: python alert_bot.py
