@@ -1,6 +1,6 @@
 import streamlit as st
 from market import get_timeframes
-from strategy_mobile import analyze, trade_plan, risk_guard
+from strategy_mobile import analyze, position_review
 import json
 from pathlib import Path
 from datetime import datetime
@@ -93,6 +93,7 @@ with open(CONFIG_PATH, "r", encoding="utf-8") as f:
 # ============================================================
 
 ASSETS = {
+    "XRP · XRP/USD": "XRP-USD",
     "Bitcoin · BTC/USD": "BTC-USD",
     "Ethereum · ETH/USD": "ETH-USD",
     "EUR/USD": "EURUSD=X",
@@ -129,56 +130,40 @@ with st.expander("⚙️ Ajustes de riesgo"):
     balance = st.number_input(
         "Capital de referencia",
         min_value=0.0,
-        value=1000.0,
+        value=500.0,
         step=100.0
     )
 
-    risk_pct = st.number_input(
-        "Riesgo máximo por operación (%)",
-        min_value=0.1,
-        max_value=10.0,
-        value=1.0,
-        step=0.1
-    )
-
-    sl_pct = st.number_input(
-        "Stop de referencia (%)",
-        min_value=0.1,
-        max_value=20.0,
-        value=1.0,
-        step=0.1
-    )
-
-    tp_pct = st.number_input(
-        "Objetivo de referencia (%)",
-        min_value=0.1,
-        max_value=50.0,
-        value=2.0,
-        step=0.1
-    )
-
-    exposure_pct = st.number_input(
-        "Exposición actual (%)",
-        min_value=0.0,
-        max_value=100.0,
-        value=0.0,
-        step=1.0
-    )
-
     max_exposure_pct = st.number_input(
-        "Exposición máxima permitida (%)",
+        "Límite de exposición para simulación (%) · ajustable",
         min_value=1.0,
         max_value=100.0,
         value=30.0,
         step=1.0
     )
 
-    free_margin = st.number_input(
-        "Margen libre",
-        min_value=0.0,
-        value=1000.0,
-        step=100.0
-    )
+st.markdown("### 🛡️ Posición Quantfury · datos manuales")
+st.caption("Referencia: capturas del 23/09/2026. Actualiza cada cifra antes de usar esta evaluación; no hay conexión con Quantfury.")
+trading_balance = st.number_input("Saldo de la cuenta de trading (USD)", min_value=0.0, value=212.83, step=10.0)
+trading_power = st.number_input("Poder de trading total (USD)", min_value=1.0, value=10000.0, step=100.0)
+allocated_power = st.number_input("Posiciones y órdenes asignadas (USD)", min_value=0.0, value=9278.47, step=100.0)
+quantity = st.number_input("Cantidad XRP", min_value=0.0, value=6022.41038875, format="%.8f")
+average_price = st.number_input("Precio medio de compra (USDT)", min_value=0.0, value=1.5409, format="%.4f")
+observed_price = st.number_input("Precio observado en Quantfury (USDT)", min_value=0.0, value=1.4944, format="%.4f")
+
+review = position_review(balance, trading_balance, trading_power, allocated_power,
+                         max_exposure_pct, quantity, average_price, observed_price)
+st.metric("Exposición asignada", f"{review['exposure_pct']:.1f}%")
+st.metric("Poder sin asignar (no es margen libre)", f"${review['available_power']:,.2f}")
+st.metric("Saldo trading frente al 40% del saldo real", f"${review['trading_balance_gap']:,.2f}")
+st.metric("Resultado aproximado de la posición", f"${review['pnl_estimate']:,.2f}")
+if review["exposure_warning"]:
+    st.warning("Compras bloqueadas en la simulación: exposición superior al límite elegido.")
+if review["balance_warning"]:
+    st.error("El saldo de trading está por debajo del umbral de referencia. Revisar protección manualmente.")
+st.info("El documento no define qué dato de Quantfury equivale a «margen libre». El umbral del 40% aplicado al saldo de trading es solo una alerta orientativa. No demuestra que exista una orden de cierre ni garantiza proteger el saldo real.")
+if not review["profit_target_met"]:
+    st.caption("La posición completa no cumple el beneficio mínimo de $50 del stop/venta de beneficios. Una venta por protección es una excepción y podría realizarse con pérdidas.")
 
 
 # ============================================================
@@ -210,12 +195,7 @@ try:
     pullback = result.get("pullback", "—")
     action = result.get("action", "ESPERAR")
 
-    risk = risk_guard(
-        balance=balance,
-        free_margin=free_margin,
-        exposure_pct=exposure_pct,
-        max_exposure_pct=max_exposure_pct
-    )
+    block_buys = review["exposure_warning"] or review["balance_warning"]
 
     # --------------------------------------------------------
     # BLOQUEO DE SEGURIDAD
@@ -223,7 +203,7 @@ try:
 
     final_action = action
 
-    if risk["block_buys"] and (
+    if block_buys and (
         "COMPRA" in final_action
         or signal == "BUY"
     ):
@@ -234,10 +214,10 @@ try:
     # --------------------------------------------------------
 
     if signal == "BUY":
-        signal_text = "🟢 COMPRA"
+        signal_text = "🟢 SEÑAL ALCISTA"
 
     elif signal == "SELL":
-        signal_text = "🔴 VENTA"
+        signal_text = "🔴 SEÑAL BAJISTA"
 
     else:
         signal_text = "🟡 ESPERAR"
@@ -310,16 +290,14 @@ try:
     # RIESGO
     # ========================================================
 
-    risk_icon = "🟢" if risk["safe"] else "🔴"
-
     st.markdown(
         f"""
         <div class="card">
             <div class="v4-title">🛡️ Protección de riesgo</div>
-            <b>{risk_icon} {risk["message"]}</b><br>
-            Exposición: {exposure_pct:.1f}% /
+            <b>{'🔴 REVISAR' if block_buys else '🟢 DENTRO DE LOS LÍMITES INTRODUCIDOS'}</b><br>
+            Exposición: {review['exposure_pct']:.1f}% /
             máximo {max_exposure_pct:.1f}%<br>
-            Margen libre: {free_margin:,.2f}
+            Saldo de trading: {trading_balance:,.2f} USD
         </div>
         """,
         unsafe_allow_html=True
@@ -350,44 +328,6 @@ try:
         st.metric(
             "M1",
             "OK" if result["trigger"] else "NO"
-        )
-
-
-    # ========================================================
-    # PLAN DE OPERACION
-    # ========================================================
-
-    if signal in ("BUY", "SELL") and not risk["block_buys"]:
-
-        plan = trade_plan(
-            price,
-            signal,
-            balance,
-            risk_pct,
-            sl_pct,
-            tp_pct
-        )
-
-        st.markdown("### 📋 Plan de referencia")
-
-        st.write(
-            f"**Entrada de referencia:** "
-            f"{price:,.2f}"
-        )
-
-        st.write(
-            f"**Stop de referencia:** "
-            f"{plan['stop']:,.2f}"
-        )
-
-        st.write(
-            f"**Objetivo de referencia:** "
-            f"{plan['target']:,.2f}"
-        )
-
-        st.write(
-            f"**Riesgo máximo:** "
-            f"{plan['risk_cash']:,.2f}"
         )
 
 
@@ -455,7 +395,7 @@ try:
 
     st.caption(
         "V4 funciona actualmente en modo análisis/simulación. "
-        "No ejecuta órdenes reales."
+        "No ejecuta órdenes reales. Las señales M1/M5/M15 no son una decisión de inversión a meses."
     )
 
 

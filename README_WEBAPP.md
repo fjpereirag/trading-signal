@@ -4,9 +4,9 @@ Web-app sencilla para consultar señales desde Android/iPhone sin instalar Pytho
 
 ## Qué verá el usuario
 1. Activo.
-2. COMPRAR / VENDER / ESPERAR.
+2. Señal técnica alcista / bajista / esperar y revisión manual de riesgo.
 3. M15 tendencia, M5 confirmación, M1 entrada.
-4. Entrada/stop/objetivo/riesgo solo cuando las 3 reglas se cumplen.
+4. No propone stop ni venta con beneficio sin datos suficientes de la posición.
 5. Detalle técnico oculto en "¿Por qué esta señal?".
 
 ## Publicarla en Streamlit Community Cloud

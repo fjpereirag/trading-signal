@@ -183,6 +183,43 @@ def risk_guard(
     return result
 
 
+def position_review(
+    protected_balance,
+    trading_balance,
+    trading_power,
+    allocated_power,
+    max_exposure_pct,
+    quantity,
+    average_price,
+    observed_price,
+):
+    """Read-only assessment of manually entered Quantfury account snapshots.
+
+    The document's 'free margin' has no confirmed Quantfury equivalent.
+    Consequently the 40% check is a warning based on trading balance, not
+    a claim about the broker's liquidation or margin rules.
+    """
+    if protected_balance <= 0 or trading_power <= 0 or quantity < 0:
+        raise ValueError("Saldo real y poder de trading deben ser positivos.")
+    if min(trading_balance, allocated_power, average_price, observed_price) < 0:
+        raise ValueError("Los importes y precios no pueden ser negativos.")
+
+    threshold = protected_balance * 0.40
+    exposure_pct = allocated_power / trading_power * 100
+    pnl_estimate = quantity * (observed_price - average_price)
+    return {
+        "threshold": threshold,
+        "trading_balance_gap": trading_balance - threshold,
+        "balance_warning": trading_balance < threshold,
+        "exposure_pct": exposure_pct,
+        "exposure_warning": exposure_pct >= max_exposure_pct,
+        "available_power": trading_power - allocated_power,
+        "pnl_estimate": pnl_estimate,
+        "profit_target_met": pnl_estimate >= 50,
+        "estimated_change_per_cent": quantity * 0.01,
+    }
+
+
 def analyze(tfs, cfg):
     """
     Analisis V4 compatible con la aplicacion V3.1.

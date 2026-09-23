@@ -11,6 +11,7 @@ TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 ASSETS = {
+    "XRP": "XRP-USD",
     "Bitcoin": "BTC-USD",
     "Ethereum": "ETH-USD",
     "EUR/USD": "EURUSD=X",
@@ -62,19 +63,17 @@ def main():
                 )
             )
 
-            if signal == "BUY":
-                action = "🟢 COMPRAR"
-            else:
-                action = "🔴 VENDER"
+            action = "🟢 Señal técnica alcista" if signal == "BUY" else "🔴 Señal técnica bajista"
 
             message = (
-                f"📈 TRADING SIGNAL V3.1\n\n"
+                f"📈 TRADING SIGNAL V4 · SIMULACIÓN\n\n"
                 f"{action}\n"
                 f"Activo: {name}\n"
                 f"Precio externo: {price:.4f}\n"
                 f"Reglas: {score}/3\n"
                 f"Calidad técnica: {quality}\n\n"
-                f"M15 tendencia + M5 confirmación + M1 gatillo."
+                f"M15 tendencia + M5 confirmación + M1 gatillo. "
+                f"Sin datos de la cuenta ni órdenes en Quantfury."
             )
 
             send_telegram(message)
