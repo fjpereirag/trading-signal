@@ -1,94 +1,498 @@
 import numpy as np
 
 
+# ============================================================
+# TRADING SIGNAL V4
+# Motor de decision + contexto + zonas + riesgo
+# MODO: SIMULACION / ALERTAS
+# No ejecuta ordenes reales
+# ============================================================
+
+
 def indicators(df, cfg):
     x = df.copy()
+
+    # STOCHASTIC
     lo = x["Low"].rolling(cfg["stoch_k"]).min()
     hi = x["High"].rolling(cfg["stoch_k"]).max()
-    den = (hi-lo).replace(0, np.nan)
-    x["K"] = 100*(x["Close"]-lo)/den
+    den = (hi - lo).replace(0, np.nan)
+
+    x["K"] = 100 * (x["Close"] - lo) / den
     x["D"] = x["K"].rolling(cfg["stoch_d"]).mean()
-    x["EMA200"] = x["Close"].ewm(span=cfg["ema_fast"], adjust=False).mean()
-    x["EMA365"] = x["Close"].ewm(span=cfg["ema_slow"], adjust=False).mean()
 
+    # EMAs
+    x["EMA200"] = x["Close"].ewm(
+        span=cfg["ema_fast"],
+        adjust=False
+    ).mean()
+
+    x["EMA365"] = x["Close"].ewm(
+        span=cfg["ema_slow"],
+        adjust=False
+    ).mean()
+
+    # RSI 14
     delta = x["Close"].diff()
-    gain = delta.clip(lower=0).ewm(alpha=1/14, adjust=False).mean()
-    loss = (-delta.clip(upper=0)).ewm(alpha=1/14, adjust=False).mean()
+
+    gain = delta.clip(lower=0).ewm(
+        alpha=1 / 14,
+        adjust=False
+    ).mean()
+
+    loss = (-delta.clip(upper=0)).ewm(
+        alpha=1 / 14,
+        adjust=False
+    ).mean()
+
     rs = gain / loss.replace(0, np.nan)
-    x["RSI"] = 100 - 100/(1+rs)
+    x["RSI"] = 100 - 100 / (1 + rs)
 
+    # ATR 14
     prev_close = x["Close"].shift(1)
-    tr = np.maximum(x["High"]-x["Low"],
-                    np.maximum((x["High"]-prev_close).abs(),
-                               (x["Low"]-prev_close).abs()))
-    x["ATR"] = tr.ewm(alpha=1/14, adjust=False).mean()
-    return x
 
-def analyze(tfs, cfg):
-    z = {k: indicators(v, cfg) for k,v in tfs.items()}
-    m15, m5, m1 = z["M15"].iloc[-1], z["M5"].iloc[-1], z["M1"].iloc[-1]
-    p1 = z["M1"].iloc[-2]
-
-    up = m15.Close > m15.EMA200 > m15.EMA365
-    down = m15.Close < m15.EMA200 < m15.EMA365
-    direction = "BUY" if up else "SELL" if down else "WAIT"
-    trend_text = "↑ Alcista" if up else "↓ Bajista" if down else "↔ Neutral"
-
-    confirm = ((direction=="BUY" and m5.K>m5.D and m5.Close>m5.EMA200) or
-               (direction=="SELL" and m5.K<m5.D and m5.Close<m5.EMA200))
-    trigger = ((direction=="BUY" and p1.K<=p1.D and m1.K>m1.D) or
-               (direction=="SELL" and p1.K>=p1.D and m1.K<m1.D))
-
-    score = int(direction!="WAIT") + int(confirm) + int(trigger)
-    base_signal = direction if score == 3 else "WAIT"
-
-    # V3: filtros de calidad. No son una probabilidad de acierto.
-    ema_sep = abs(m15.EMA200-m15.EMA365) / m15.Close * 100 if m15.Close else 0
-    rsi_ok = ((direction=="BUY" and 52 <= m5.RSI <= 72) or
-              (direction=="SELL" and 28 <= m5.RSI <= 48))
-    momentum_ok = ((direction=="BUY" and m5.K > m5.D and m1.K > m1.D) or
-                   (direction=="SELL" and m5.K < m5.D and m1.K < m1.D))
-    trend_strength_ok = ema_sep >= 0.08
-    atr_pct = (m5.ATR/m5.Close*100) if m5.Close else 0
-    volatility_ok = 0.05 <= atr_pct <= 3.0
-
-    quality_points = sum([bool(rsi_ok), bool(momentum_ok),
-                          bool(trend_strength_ok), bool(volatility_ok)])
-    quality = "ALTA" if quality_points >= 4 else "MEDIA" if quality_points >= 2 else "BAJA"
-
-    # Una señal 3/3 de calidad baja se frena: se muestra ESPERAR.
-    signal = base_signal if (base_signal!="WAIT" and quality!="BAJA") else "WAIT"
-
-    if direction=="WAIT":
-        reason = "Sin operación: M15 no define una tendencia clara."
-    elif not confirm:
-        reason = "Sin operación: M5 todavía no confirma M15."
-    elif not trigger:
-        reason = "Sin operación: falta el gatillo de entrada en M1."
-    elif quality=="BAJA":
-        reason = "3/3 técnico, pero los filtros V3 indican calidad baja: esperar."
-    else:
-        reason = f"Condiciones completas. Calidad técnica {quality.lower()}."
-
-    return dict(
-        signal=signal, raw_signal=base_signal, score=score, quality=quality,
-        quality_points=quality_points, trend_text=trend_text,
-        confirm=confirm, trigger=trigger, reason=reason,
-        k15=m15.K, d15=m15.D, k5=m5.K, d5=m5.D, k1=m1.K, d1=m1.D,
-        rsi5=m5.RSI, ema_sep=ema_sep, atr_pct=atr_pct,
-        filters={"RSI":bool(rsi_ok), "Impulso":bool(momentum_ok),
-                 "Tendencia":bool(trend_strength_ok), "Volatilidad":bool(volatility_ok)}
+    tr = np.maximum(
+        (x["High"] - x["Low"]).abs(),
+        np.maximum(
+            (x["High"] - prev_close).abs(),
+            (x["Low"] - prev_close).abs()
+        )
     )
 
-def trade_plan(price, side, balance, risk_pct, sl_pct, tp_pct):
-    if side=="WAIT":
-        return None
-    risk_cash = balance*risk_pct/100
-    dist = price*sl_pct/100
-    qty = risk_cash/dist if dist else 0
-    if side=="BUY":
-        stop=price*(1-sl_pct/100); target=price*(1+tp_pct/100)
+    x["ATR"] = tr.ewm(
+        alpha=1 / 14,
+        adjust=False
+    ).mean()
+
+    # Rango dinamico para zonas de valor
+    x["HIGH20"] = x["High"].rolling(20).max()
+    x["LOW20"] = x["Low"].rolling(20).min()
+
+    return x
+
+
+def market_zone(row):
+    """
+    Clasifica el precio dentro del rango reciente:
+    ALTA / MEDIA / BAJA / PROFUNDA
+    """
+
+    high = row["HIGH20"]
+    low = row["LOW20"]
+    price = row["Close"]
+
+    if np.isnan(high) or np.isnan(low) or high <= low:
+        return "DESCONOCIDA", 0.5
+
+    position = (price - low) / (high - low)
+
+    if position >= 0.75:
+        zone = "ALTA"
+    elif position >= 0.45:
+        zone = "MEDIA"
+    elif position >= 0.20:
+        zone = "BAJA"
     else:
-        stop=price*(1+sl_pct/100); target=price*(1-tp_pct/100)
-    return dict(entry=price, stop=stop, target=target,
-                risk_cash=risk_cash, qty_reference=qty)
+        zone = "PROFUNDA"
+
+    return zone, float(position)
+
+
+def classify_context(m15, m5):
+    """
+    Contexto principal V4.
+    """
+
+    ema_gap = abs(
+        m15["EMA200"] - m15["EMA365"]
+    ) / m15["Close"] * 100
+
+    atr_pct = (
+        m15["ATR"] / m15["Close"] * 100
+        if m15["Close"] else 0
+    )
+
+    bullish = (
+        m15["Close"] > m15["EMA200"] > m15["EMA365"]
+    )
+
+    bearish = (
+        m15["Close"] < m15["EMA200"] < m15["EMA365"]
+    )
+
+    momentum_up = m5["K"] > m5["D"]
+    momentum_down = m5["K"] < m5["D"]
+
+    if bullish and momentum_up:
+        context = "ALCISTA"
+    elif bearish and momentum_down:
+        context = "BAJISTA"
+    else:
+        context = "NEUTRO"
+
+    return {
+        "context": context,
+        "ema_gap_pct": float(ema_gap),
+        "atr_pct": float(atr_pct)
+    }
+
+
+def risk_guard(
+    balance=None,
+    free_margin=None,
+    exposure_pct=None,
+    max_exposure_pct=30.0
+):
+    """
+    Motor de proteccion V4.
+
+    IMPORTANTE:
+    No garantiza ausencia de perdidas.
+    Solo aplica reglas programadas de control de riesgo.
+    """
+
+    result = {
+        "safe": True,
+        "block_buys": False,
+        "protect_margin": False,
+        "message": "RIESGO OK"
+    }
+
+    if (
+        exposure_pct is not None
+        and exposure_pct >= max_exposure_pct
+    ):
+        result["safe"] = False
+        result["block_buys"] = True
+        result["message"] = "EXPOSICION MAXIMA"
+
+    if (
+        balance is not None
+        and free_margin is not None
+        and balance > 0
+    ):
+        margin_ratio = free_margin / balance
+
+        result["margin_ratio"] = margin_ratio
+
+        if margin_ratio < 0.40:
+            result["safe"] = False
+            result["block_buys"] = True
+            result["protect_margin"] = True
+            result["message"] = "PROTEGER MARGEN"
+
+    return result
+
+
+def analyze(tfs, cfg):
+    """
+    Analisis V4 compatible con la aplicacion V3.1.
+    """
+
+    z = {
+        k: indicators(v, cfg)
+        for k, v in tfs.items()
+    }
+
+    m15 = z["M15"].iloc[-1]
+    m5 = z["M5"].iloc[-1]
+    m1 = z["M1"].iloc[-1]
+    p1 = z["M1"].iloc[-2]
+
+    # --------------------------------------------------------
+    # 1. TENDENCIA M15
+    # --------------------------------------------------------
+
+    up = (
+        m15.Close > m15.EMA200 > m15.EMA365
+    )
+
+    down = (
+        m15.Close < m15.EMA200 < m15.EMA365
+    )
+
+    trend = (
+        "BUY"
+        if up
+        else "SELL"
+        if down
+        else "WAIT"
+    )
+
+    # --------------------------------------------------------
+    # 2. CONFIRMACION M5
+    # --------------------------------------------------------
+
+    confirm = False
+
+    if trend == "BUY":
+        confirm = (
+            m5.K > m5.D
+            and m5.Close > m5.EMA200
+        )
+
+    elif trend == "SELL":
+        confirm = (
+            m5.K < m5.D
+            and m5.Close < m5.EMA200
+        )
+
+    # --------------------------------------------------------
+    # 3. GATILLO M1
+    # --------------------------------------------------------
+
+    trigger = False
+
+    if trend == "BUY":
+        trigger = (
+            p1.K <= p1.D
+            and m1.K > m1.D
+        )
+
+    elif trend == "SELL":
+        trigger = (
+            p1.K >= p1.D
+            and m1.K < m1.D
+        )
+
+    score = (
+        int(trend != "WAIT")
+        + int(confirm)
+        + int(trigger)
+    )
+
+    raw_signal = (
+        trend
+        if score == 3
+        else "WAIT"
+    )
+
+    # --------------------------------------------------------
+    # 4. FILTROS DE CALIDAD
+    # --------------------------------------------------------
+
+    ema_sep = (
+        abs(m15.EMA200 - m15.EMA365)
+        / m15.Close
+        * 100
+    )
+
+    ema_ok = ema_sep >= 0.08
+
+    if raw_signal == "BUY":
+        rsi_ok = 52 <= m15.RSI <= 72
+
+    elif raw_signal == "SELL":
+        rsi_ok = 28 <= m15.RSI <= 48
+
+    else:
+        rsi_ok = False
+
+    if raw_signal == "BUY":
+        momentum_ok = (
+            m5.K > m5.D
+            and m1.K > m1.D
+        )
+
+    elif raw_signal == "SELL":
+        momentum_ok = (
+            m5.K < m5.D
+            and m1.K < m1.D
+        )
+
+    else:
+        momentum_ok = False
+
+    atr_pct = (
+        m15.ATR / m15.Close * 100
+    )
+
+    atr_ok = 0.05 <= atr_pct <= 3.0
+
+    filters = {
+        "ema": bool(ema_ok),
+        "rsi": bool(rsi_ok),
+        "momentum": bool(momentum_ok),
+        "atr": bool(atr_ok)
+    }
+
+    quality_points = sum(filters.values())
+
+    if quality_points == 4:
+        quality = "ALTA"
+
+    elif quality_points >= 2:
+        quality = "MEDIA"
+
+    else:
+        quality = "BAJA"
+
+    signal = raw_signal
+
+    if signal != "WAIT" and quality == "BAJA":
+        signal = "WAIT"
+
+    # --------------------------------------------------------
+    # 5. CONTEXTO V4
+    # --------------------------------------------------------
+
+    context_data = classify_context(m15, m5)
+
+    zone, zone_position = market_zone(m15)
+
+    # Detectamos retroceso respecto al cierre anterior M15
+    prev_m15 = z["M15"].iloc[-2]
+
+    change_pct = (
+        (m15.Close - prev_m15.Close)
+        / prev_m15.Close
+        * 100
+    )
+
+    if change_pct <= -1.5:
+        pullback = "PROFUNDO"
+
+    elif change_pct <= -0.25:
+        pullback = "REAL"
+
+    elif change_pct < 0:
+        pullback = "SUAVE"
+
+    else:
+        pullback = "NO"
+
+    # --------------------------------------------------------
+    # 6. DECISION V4
+    # --------------------------------------------------------
+
+    action = "ESPERAR"
+
+    if (
+        context_data["context"] == "ALCISTA"
+        and zone == "BAJA"
+        and pullback in ("REAL", "PROFUNDO")
+    ):
+        action = "PREPARAR_COMPRA"
+
+    if (
+        context_data["context"] == "ALCISTA"
+        and zone == "PROFUNDA"
+        and pullback in ("REAL", "PROFUNDO")
+    ):
+        action = "PREPARAR_COMPRA_ADICIONAL"
+
+    # La señal tecnica 3/3 sigue siendo necesaria
+    # para convertir PREPARAR en una señal operativa.
+    if action.startswith("PREPARAR") and signal != "BUY":
+        action = "ESPERAR_CONFIRMACION"
+
+    # --------------------------------------------------------
+    # 7. MOTIVO
+    # --------------------------------------------------------
+
+    reason = (
+        f"M15={trend} | "
+        f"M5={'OK' if confirm else 'NO'} | "
+        f"M1={'OK' if trigger else 'NO'} | "
+        f"Score={score}/3 | "
+        f"Contexto={context_data['context']} | "
+        f"Zona={zone} | "
+        f"Retroceso={pullback} | "
+        f"Accion={action}"
+    )
+
+    # --------------------------------------------------------
+    # RESULTADO
+    # --------------------------------------------------------
+
+    return {
+        "signal": signal,
+        "raw_signal": raw_signal,
+        "quality": quality,
+        "score": score,
+        "trend": trend,
+        "confirm": bool(confirm),
+        "trigger": bool(trigger),
+        "filters": filters,
+
+        "price": float(m1.Close),
+
+        "metrics": {
+            "ema_sep_pct": float(ema_sep),
+            "rsi": float(m15.RSI),
+            "atr_pct": float(atr_pct),
+            "m15_k": float(m15.K),
+            "m15_d": float(m15.D),
+            "m5_k": float(m5.K),
+            "m5_d": float(m5.D),
+            "m1_k": float(m1.K),
+            "m1_d": float(m1.D)
+        },
+
+        # Nuevos campos V4
+        "context": context_data["context"],
+        "zone": zone,
+        "zone_position": zone_position,
+        "pullback": pullback,
+        "action": action,
+
+        "reason": reason
+    }
+
+
+def trade_plan(
+    price,
+    side,
+    balance,
+    risk_pct,
+    sl_pct,
+    tp_pct
+):
+    """
+    Plan de operacion de referencia.
+    NO ejecuta ordenes.
+    """
+
+    risk_cash = (
+        balance * risk_pct / 100
+    )
+
+    if side == "BUY":
+        stop = price * (
+            1 - sl_pct / 100
+        )
+
+        target = price * (
+            1 + tp_pct / 100
+        )
+
+    elif side == "SELL":
+        stop = price * (
+            1 + sl_pct / 100
+        )
+
+        target = price * (
+            1 - tp_pct / 100
+        )
+
+    else:
+        return {
+            "risk_cash": risk_cash,
+            "stop": None,
+            "target": None,
+            "qty_reference": 0
+        }
+
+    risk_per_unit = abs(price - stop)
+
+    qty = (
+        risk_cash / risk_per_unit
+        if risk_per_unit > 0
+        else 0
+    )
+
+    return {
+        "risk_cash": float(risk_cash),
+        "stop": float(stop),
+        "target": float(target),
+        "qty_reference": float(qty)
+    }
