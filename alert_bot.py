@@ -88,6 +88,29 @@ def main():
             score = result.get("score", 0)
             quality = result.get("quality", "BAJA")
 
+            # XRP: aviso previo cuando M15 y M5 coinciden, antes del gatillo M1.
+            # Una ventana de cinco minutos por cuarto de hora limita repeticiones.
+            now = datetime.now(timezone.utc)
+            early_xrp = (
+                name == "XRP"
+                and result.get("trend") == "BUY"
+                and result.get("confirm")
+                and not result.get("trigger")
+                and score == 2
+                and now.minute % 15 < 5
+            )
+            if early_xrp:
+                send_telegram(
+                    "🟡 TRADING SIGNAL V4 · AVISO PREVIO XRP\n"
+                    f"{now:%d/%m/%Y %H:%M} UTC\n"
+                    f"Precio externo: {result['price']:.4f} USD\n"
+                    "M15 tendencia alcista + M5 confirmación: 2/3. "
+                    "Falta el gatillo M1; no hay señal completa.\n"
+                    f"Contexto: {result['context']} · zona: {result['zone']}.\n"
+                    "Consulta tu posición y el precio ejecutable en Quantfury. "
+                    "Cuenta no conectada; sin órdenes ni recomendación automática."
+                )
+
             # Solo avisamos cuando existe señal completa 3/3
             # y supera los filtros de calidad.
             if signal not in ("BUY", "SELL") or score != 3:
