@@ -143,13 +143,13 @@ with st.expander("⚙️ Ajustes de riesgo"):
     )
 
 st.markdown("### 🛡️ Posición Quantfury · datos manuales")
-st.caption("Referencia: capturas del 23/09/2026. Actualiza cada cifra antes de usar esta evaluación; no hay conexión con Quantfury.")
-trading_balance = st.number_input("Saldo de la cuenta de trading (USD)", min_value=0.0, value=212.83, step=10.0)
-trading_power = st.number_input("Poder de trading total (USD)", min_value=1.0, value=10000.0, step=100.0)
-allocated_power = st.number_input("Posiciones y órdenes asignadas (USD)", min_value=0.0, value=9278.47, step=100.0)
-quantity = st.number_input("Cantidad XRP", min_value=0.0, value=6022.41038875, format="%.8f")
-average_price = st.number_input("Precio medio de compra (USDT)", min_value=0.0, value=1.5409, format="%.4f")
-observed_price = st.number_input("Precio observado en Quantfury (USDT)", min_value=0.0, value=1.4944, format="%.4f")
+st.caption("Introduce tus cifras actuales antes de usar esta evaluación manual; esta pantalla no está conectada a Quantfury.")
+trading_balance = st.number_input("Saldo de la cuenta de trading (USD)", min_value=0.0, value=0.0, step=10.0)
+trading_power = st.number_input("Poder de trading total (USD)", min_value=1.0, value=1.0, step=100.0)
+allocated_power = st.number_input("Posiciones y órdenes asignadas (USD)", min_value=0.0, value=0.0, step=100.0)
+quantity = st.number_input("Cantidad XRP", min_value=0.0, value=0.0, format="%.8f")
+average_price = st.number_input("Precio medio de compra (USDT)", min_value=0.0, value=0.0, format="%.4f")
+observed_price = st.number_input("Precio observado en Quantfury (USDT)", min_value=0.0, value=0.0, format="%.4f")
 
 review = position_review(balance, trading_balance, trading_power, allocated_power,
                          max_exposure_pct, quantity, average_price, observed_price)
