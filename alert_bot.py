@@ -82,42 +82,38 @@ def main():
         with open("config.json", "r", encoding="utf-8") as f:
             cfg = json.load(f)
         lines = [
-            "📊 Trading Signal V4 · seguimiento de prueba XRP" if scheduled_report
-            else "📊 Trading Signal V4 · consulta puntual XRP",
-            "Enviado: " + datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC"),
-            "Precios externos de Yahoo Finance; no son precios ejecutables en Quantfury.",
+            "📊 XRP · seguimiento" if scheduled_report else "📊 XRP · consulta",
+            "Objetivo: acumular USDT para comprar BTC en spot.",
+            datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC"),
         ]
         for name, ticker in ASSETS.items():
             try:
                 tfs = get_timeframes(ticker)
                 now = datetime.now(timezone.utc)
-                lines.append(data_time_label(tfs, now))
                 if not fresh_market_data(tfs, now):
-                    lines.append(f"{name}: datos externos desactualizados; sin señal.")
+                    lines.append(f"{name}: vela Yahoo desactualizada; sin señal.")
                     continue
                 result = analyze(tfs, cfg)
                 lines.append(
-                    f"{name}: {result['price']:.4f} USD · "
-                    f"contexto {result['context']} · zona {result['zone']} · "
-                    f"reglas {result['score']}/3 · acción simulada "
+                    f"{name} (Yahoo): {result['price']:.4f} USD · "
+                    f"reglas {result['score']}/3 · "
                     f"{result['action'].replace('_', ' ')}"
                 )
             except Exception as exc:
                 print(f"Error consultando {name}: {exc}")
-                lines.append(f"{name}: datos no disponibles en esta consulta.")
+                lines.append(f"{name}: datos de mercado no disponibles.")
         if account_context:
             account, review = account_context
             lines.append(
-                f"Quantfury consultado ahora: saldo trading {account['balance']:.2f} "
-                f"{account['currency']}; poder disponible {account['availableTradingPower']:.2f} USD; "
-                f"exposición asignada {review['exposure_pct']:.1f}%."
+                f"Quantfury: saldo trading {account['balance']:.2f} "
+                f"{account['currency']} · exposición {review['exposure_pct']:.1f}% "
+                f"· XRP abiertas {len(review['xrp'])}."
             )
-            lines.append(f"Posiciones XRP abiertas: {len(review['xrp'])}.")
             if review["block_buys"]:
-                lines.append("Límite de exposición 30% alcanzado: compra bloqueada en el análisis.")
+                lines.append("Compras XRP bloqueadas en el análisis: exposición ≥30%.")
         else:
-            lines.append("Cuenta Quantfury no conectada a GitHub; análisis técnico externo únicamente.")
-        lines.append("Sin órdenes; ejecución manual.")
+            lines.append("Quantfury sin conexión; datos de mercado externos.")
+        lines.append("Precios Yahoo no ejecutables. Sin órdenes.")
         send_telegram("\n".join(lines))
         print("Seguimiento XRP enviado al chat configurado.")
         return
