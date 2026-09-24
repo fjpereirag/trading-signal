@@ -65,7 +65,7 @@ def review_xrp(account, positions, max_exposure_pct=30):
     if power <= 0 or not 0 <= available <= power:
         raise ValueError("Poder de trading inválido")
     exposure = (power - available) / power * 100
-    xrp = [p for p in positions if p.get("shortNameDisplay", "").upper() == "XRP"]
+    xrp = [p for p in positions if p.get("shortNameDisplay", "").upper() in ("XRP", "XRP/USDT")]
     return {
         "exposure_pct": exposure,
         "block_buys": exposure >= max_exposure_pct,
