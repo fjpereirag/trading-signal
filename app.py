@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from datetime import datetime
 import requests
+import hmac
+from run_now import dispatch
 
 
 # ============================================================
@@ -112,6 +114,34 @@ st.caption(
     "Contexto · zonas de valor · retrocesos · "
     "M15 tendencia · M5 confirmación · M1 gatillo"
 )
+
+st.markdown("### ▶️ Consultar Quantfury y XRP/USDT ahora")
+st.caption("Inicia el workflow de GitHub: lee Quantfury y Binance y envía las tres líneas a Telegram. No ejecuta operaciones.")
+try:
+    dispatch_token = st.secrets.get("GH_WORKFLOW_DISPATCH_TOKEN", "")
+    access_password = st.secrets.get("APP_ACTION_PASSWORD", "")
+except FileNotFoundError:
+    dispatch_token = access_password = ""
+
+if dispatch_token and access_password:
+    entered_password = st.text_input("Clave para ejecutar la consulta", type="password", key="run_now_password")
+    if st.button("▶️ Ejecutar todo ahora", use_container_width=True):
+        if not hmac.compare_digest(entered_password, access_password):
+            st.error("Clave incorrecta.")
+        else:
+            try:
+                dispatch(dispatch_token)
+            except requests.RequestException:
+                st.error("GitHub no aceptó la solicitud. Revisa el permiso Actions: write del token.")
+            else:
+                st.success("Ejecución solicitada. El aviso llegará a Telegram al terminar GitHub Actions.")
+else:
+    st.link_button(
+        "▶️ Abrir ejecución manual en GitHub",
+        "https://github.com/fjpereirag/trading-signal/actions/workflows/main.yml",
+        use_container_width=True,
+    )
+    st.caption("En GitHub pulsa Run workflow → Run workflow. Allí ya están configurados los secretos de Quantfury y Telegram.")
 
 asset_name = st.selectbox(
     "Activo",
