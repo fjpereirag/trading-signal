@@ -1,102 +1,27 @@
-# Agente Trading Móvil
+# Consulta XRP/USDT
 
-## Alertas XRP/USDT sincronizadas
+La [app Streamlit](https://trading-signal-fd3u8cqcappfwgngqujg8vp.streamlit.app/) ofrece un botón para consultar la cuenta de Quantfury y las velas completadas de Binance Spot XRP/USDT. GitHub Actions calcula tres indicaciones sobre acción, stop y parcial, y Streamlit las muestra al terminar. No se envían órdenes, no se mueven fondos y no se necesita Telegram.
 
-El workflow consulta cada vez saldo y posiciones de Quantfury mediante el MCP
-existente y velas completas de Binance Spot XRP/USDT. Si faltan credenciales,
-la consulta de cuenta falla o la última vela supera tres minutos, no se envía
-ninguna indicación. No se conserva un saldo manual entre ejecuciones: después
-de operar en Quantfury, la ejecución siguiente vuelve a leer la cuenta.
+Cada consulta vuelve a leer la cuenta y los datos de mercado. El flujo se detiene si la autorización falla, faltan velas recientes o los datos de la posición son incompletos. GitHub Actions no garantiza respuesta instantánea ni sustituye los stops colocados en Quantfury.
 
-El mensaje contiene exactamente tres líneas (Acción, SL, Parcial). Comprar exige
-señal técnica, retroceso en zona de valor y
-exposición inferior al 30%. La venta con beneficio, el tamaño parcial y la
-subida del SL aún no se automatizan: faltan condiciones de ruptura y cantidades
-parciales acordadas. La posición MCP sí devuelve su precio, sus stops activos y
-sus objetivos parciales. Si el precio de Quantfury toca un SL, el mensaje pide
-comprobar la ejecución en la plataforma. GitHub Actions se puede retrasar: este bot no
-sustituye los stops puestos en la plataforma.
+## Configurar la app
 
-La consulta programada de Quantfury ya funcionó en GitHub Actions el
-24/09/2026 a las 18:25 UTC y envió el seguimiento a Telegram. Falta comprobar
-la primera ejecución del flujo actualizado con Binance y las tres líneas.
-No se envían órdenes ni transferencias.
+Sigue [README_WEBAPP.md](README_WEBAPP.md). Streamlit necesita `GH_WORKFLOW_DISPATCH_TOKEN` con permiso `Actions: read and write` y `APP_ACTION_PASSWORD`. El repositorio GitHub Actions necesita un secreto `APP_RESULT_PASSWORD` con el mismo valor de la clave de Streamlit. Las respuestas se guardan cifradas durante un día como artefactos de GitHub.
 
-Interfaz simplificada para tomar decisiones desde el teléfono.
+## Volver a autorizar Quantfury
 
-## Pantalla principal
-- Señal técnica alcista / bajista / esperar, separada de la revisión de riesgo
-- M15: tendencia
-- M5: confirmación
-- M1: gatillo de entrada
-- 3/3 = las tres reglas están cumplidas; NO significa 3/3 operaciones ganadoras.
-- El stop de beneficios del documento no se calcula con un porcentaje fijo al entrar.
-
-## Ejecutar
-Instala Python 3.11+ en un ordenador/servidor:
-
-    pip install -r requirements.txt
-    streamlit run app.py
-
-Streamlit mostrará una URL. Para usarlo cómodamente en el móvil hay que alojar la app
-en un servicio web; no es necesario instalar Python en el teléfono.
-
-## Seguridad
-No solicita credenciales de Quantfury y no envía órdenes. La decisión y ejecución siguen
-siendo manuales. El feed externo puede diferir del precio ejecutable de Quantfury.
-
-## Revisión V4 de la posición XRP
-El panel web usa cifras introducidas manualmente; revísalas antes de usarlo.
-El límite de exposición del 30% es un supuesto editable. El bot usa el poder
-asignado respecto del poder total para bloquear avisos de compra cuando la
-cuenta Quantfury esté conectada. La regla del 40% del saldo real se presenta
-solo como advertencia: no existe equivalencia confirmada con «margen libre».
-Los precios externos pueden diferir de los de Quantfury. Las operaciones
-siguen siendo manuales.
-
-## Consulta Quantfury desde GitHub Actions (preparación)
-
-El flujo admite el secreto `QUANTFURY_ACCESS_TOKEN` para consultar, en modo
-lectura, la cuenta de trading y las posiciones abiertas mediante el MCP oficial.
-Si está configurado y la consulta falla, el trabajo se detiene y no sustituye
-la cuenta por las cifras antiguas del panel. La exposición se calcula como
-`(tradingPower - availableTradingPower) / tradingPower`; incluye poder asignado
-a posiciones y órdenes activas. Con 30% o más se omiten avisos de compra XRP.
-
-La autorización de ChatGPT no entrega un token a GitHub Actions. Para que la
-consulta sea permanente hace falta un método OAuth de Quantfury para ejecución
-desatendida: un access token temporal caducará. No copies la sesión, cookies
-ni credenciales de ChatGPT al repositorio. Hasta configurar esa autenticación,
-los avisos quedan suspendidos. Nunca se envían órdenes.
-
-## Conexión programada de Quantfury (experimental)
-
-GitHub Actions no recibe la autorización del complemento de ChatGPT. Para crear
-una autorización OAuth independiente, en tu propio ordenador con Python 3.11+
-y GitHub CLI instalado y autenticado (`gh auth login`), ejecuta:
+Si falla la renovación de Quantfury, desde tu propio ordenador con Python 3.11+ y GitHub CLI autenticado ejecuta:
 
 ```powershell
 py -m pip install requests
 py connect_quantfury.py
 ```
 
-El script abre Quantfury en el navegador de ese ordenador, recibe el retorno en
-`127.0.0.1`, intercambia el código con PKCE y guarda el identificador del
-cliente y el token de renovación como secretos cifrados del repositorio. Nunca
-copies contraseñas, códigos ni tokens a este repositorio o a un chat. El script
-requiere que Quantfury conceda un `refresh_token`; de lo contrario, se detiene.
+El script abre la autorización en el navegador local y guarda `QUANTFURY_CLIENT_ID` y `QUANTFURY_REFRESH_TOKEN` como secretos del repositorio. El secreto `GH_SECRETS_PAT` debe tener permiso `Secrets: read and write` para el mismo repositorio y permite guardar automáticamente un token de renovación rotado. No copies tokens o códigos de autorización en el repositorio ni en chats.
 
-Si Quantfury rota el token de renovación, GitHub Actions solo puede guardar el
-nuevo si dispone de `GH_SECRETS_PAT`: un token de GitHub limitado al repositorio
-`fjpereirag/trading-signal` con permiso **Secrets: write**. El script permite
-introducirlo sin mostrarlo y guardarlo como secreto. Si lo omites y Quantfury
-rota el token, el bot fallará de forma visible y requerirá una nueva
-configuración local. Esta opción da al workflow capacidad de cambiar secretos;
-revoca el token en GitHub si dejas de usar la integración.
+## Ejecutar pruebas locales
 
-La autorización programada ya completó una consulta real y envió un mensaje
-desde GitHub Actions. Su renovación futura puede fallar. El bot
-solo llama a herramientas de lectura de cuenta y posiciones y nunca envía
-órdenes. Si la lectura falla, no envía avisos que aparenten tener datos de la
-cuenta. GitHub puede retrasar u omitir ejecuciones programadas, por lo que las
-alertas no son una protección en tiempo real.
+```sh
+pip install -r requirements.txt
+python -m unittest test_quantfury_account.py test_alert_bot.py test_run_now.py test_result_codec.py
+```
