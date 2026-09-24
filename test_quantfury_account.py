@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import patch
 
+import quantfury_account as qa
 from quantfury_account import review_xrp, snapshot
 
 
@@ -23,6 +24,32 @@ class AccountAlertTests(unittest.TestCase):
         ]
         with self.assertRaisesRegex(RuntimeError, "incompleta"):
             snapshot()
+
+    @patch.dict("os.environ", {
+        "QUANTFURY_CLIENT_ID": "client", "QUANTFURY_REFRESH_TOKEN": "refresh",
+        "QUANTFURY_ACCESS_TOKEN": "", "GH_SECRETS_PAT": "",
+    })
+    @patch("quantfury_account.requests.post")
+    def test_refresh_without_rotation(self, post):
+        qa._cached_token = None
+        post.return_value.json.return_value = {"access_token": "new-access"}
+        self.assertEqual(qa._token(), "new-access")
+        self.assertEqual(post.call_count, 1)
+        qa._cached_token = None
+
+    @patch.dict("os.environ", {
+        "QUANTFURY_CLIENT_ID": "client", "QUANTFURY_REFRESH_TOKEN": "old",
+        "GH_SECRETS_PAT": "", "GITHUB_REPOSITORY": "fjpereirag/trading-signal",
+    })
+    @patch("quantfury_account.requests.post")
+    def test_rotation_without_storage_fails_closed(self, post):
+        qa._cached_token = None
+        post.return_value.json.return_value = {
+            "access_token": "new-access", "refresh_token": "rotated",
+        }
+        with self.assertRaisesRegex(RuntimeError, "GH_SECRETS_PAT"):
+            qa._token()
+        qa._cached_token = None
 
 
 if __name__ == "__main__":
