@@ -50,11 +50,13 @@ def main():
         print("Mensaje de prueba enviado al chat configurado.")
         return
 
-    if os.environ.get("REPORT_TELEGRAM", "").lower() == "true":
+    scheduled_report = os.environ.get("REPORT_SCHEDULE", "").lower() == "true"
+    if scheduled_report or os.environ.get("REPORT_TELEGRAM", "").lower() == "true":
         with open("config.json", "r", encoding="utf-8") as f:
             cfg = json.load(f)
         lines = [
-            "📊 Trading Signal V4 · consulta puntual",
+            "📊 Trading Signal V4 · seguimiento de prueba XRP" if scheduled_report
+            else "📊 Trading Signal V4 · consulta puntual XRP",
             datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC"),
             "Precios externos de Yahoo Finance; no son precios ejecutables en Quantfury.",
         ]
@@ -79,7 +81,7 @@ def main():
             "Sin órdenes ni recomendación automática."
         )
         send_telegram("\n".join(lines))
-        print("Informe puntual enviado al chat configurado.")
+        print("Seguimiento XRP enviado al chat configurado.")
         return
 
     with open("config.json", "r", encoding="utf-8") as f:
