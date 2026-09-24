@@ -24,14 +24,25 @@ No solicita credenciales de Quantfury y no envía órdenes. La decisión y ejecu
 siendo manuales. El feed externo puede diferir del precio ejecutable de Quantfury.
 
 ## Revisión V4 de la posición XRP
-El panel de Quantfury recibe cifras introducidas manualmente, precargadas con una
-captura del 23/09/2026 (saldo real protegido $500, poder $10.000, asignado
-$9.278,47 y saldo trading $212,83). No se actualizan solas. El límite de
-exposición del 30% es un supuesto editable; la estrategia original no da un
-porcentaje. El panel bloquea sugerencias de compra al superarlo. La regla del
-40% del saldo real se muestra como advertencia sobre el saldo de trading,
-porque «margen libre» no tiene una equivalencia confirmada en Quantfury.
-No predice liquidaciones ni promete conservar el capital. Una venta para
-proteger el riesgo puede implicar pérdidas y prevalece sobre la regla general
-de vender solo con beneficios. Las alertas de Telegram siguen siendo señales
-técnicas, sin información de la cuenta y sin ejecución de operaciones.
+El panel web usa cifras introducidas manualmente; revísalas antes de usarlo.
+El límite de exposición del 30% es un supuesto editable. El bot usa el poder
+asignado respecto del poder total para bloquear avisos de compra cuando la
+cuenta Quantfury esté conectada. La regla del 40% del saldo real se presenta
+solo como advertencia: no existe equivalencia confirmada con «margen libre».
+Los precios externos pueden diferir de los de Quantfury. Las operaciones
+siguen siendo manuales.
+
+## Consulta Quantfury desde GitHub Actions (preparación)
+
+El flujo admite el secreto `QUANTFURY_ACCESS_TOKEN` para consultar, en modo
+lectura, la cuenta de trading y las posiciones abiertas mediante el MCP oficial.
+Si está configurado y la consulta falla, el trabajo se detiene y no sustituye
+la cuenta por las cifras antiguas del panel. La exposición se calcula como
+`(tradingPower - availableTradingPower) / tradingPower`; incluye poder asignado
+a posiciones y órdenes activas. Con 30% o más se omiten avisos de compra XRP.
+
+La autorización de ChatGPT no entrega un token a GitHub Actions. Para que la
+consulta sea permanente hace falta un método OAuth de Quantfury para ejecución
+desatendida: un access token temporal caducará. No copies la sesión, cookies
+ni credenciales de ChatGPT al repositorio. Hasta configurar esa autenticación,
+los avisos siguen siendo técnicos y externos. Nunca se envían órdenes.
