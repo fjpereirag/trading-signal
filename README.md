@@ -1,5 +1,27 @@
 # Agente Trading Móvil
 
+## Alertas XRP/USDT sincronizadas
+
+El workflow consulta cada vez saldo y posiciones de Quantfury mediante el MCP
+existente y velas completas de Binance Spot XRP/USDT. Si faltan credenciales,
+la consulta de cuenta falla o la última vela supera tres minutos, no se envía
+ninguna indicación. No se conserva un saldo manual entre ejecuciones: después
+de operar en Quantfury, la ejecución siguiente vuelve a leer la cuenta.
+
+El mensaje contiene tres líneas (Acción, SL, Parcial) y un contexto de precio,
+saldo y exposición. Comprar exige señal técnica, retroceso en zona de valor y
+exposición inferior al 30%. La venta con beneficio, el tamaño parcial y la
+subida del SL aún no se automatizan: no se han verificado en la respuesta MCP
+los datos necesarios ni las condiciones de ruptura. Si el precio externo se
+acerca a un SL, el mensaje pide comprobarlo en Quantfury; Binance no demuestra
+que se haya ejecutado allí. GitHub Actions se puede retrasar: este bot no
+sustituye los stops puestos en la plataforma.
+
+Para activar los avisos se requieren los secretos de Telegram y una
+autorización Quantfury renovable y probada. La autorización OAuth programada
+ya presente en el proyecto sigue sin una prueba real completa; hasta entonces
+el flujo se detiene. No se envían órdenes ni transferencias.
+
 Interfaz simplificada para tomar decisiones desde el teléfono.
 
 ## Pantalla principal
