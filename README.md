@@ -17,10 +17,10 @@ acerca a un SL, el mensaje pide comprobarlo en Quantfury; Binance no demuestra
 que se haya ejecutado allí. GitHub Actions se puede retrasar: este bot no
 sustituye los stops puestos en la plataforma.
 
-Para activar los avisos se requieren los secretos de Telegram y una
-autorización Quantfury renovable y probada. La autorización OAuth programada
-ya presente en el proyecto sigue sin una prueba real completa; hasta entonces
-el flujo se detiene. No se envían órdenes ni transferencias.
+La consulta programada de Quantfury ya funcionó en GitHub Actions el
+24/09/2026 a las 18:25 UTC y envió el seguimiento a Telegram. Falta comprobar
+la primera ejecución del flujo actualizado con Binance y las tres líneas.
+No se envían órdenes ni transferencias.
 
 Interfaz simplificada para tomar decisiones desde el teléfono.
 
@@ -94,8 +94,8 @@ rota el token, el bot fallará de forma visible y requerirá una nueva
 configuración local. Esta opción da al workflow capacidad de cambiar secretos;
 revoca el token en GitHub si dejas de usar la integración.
 
-No hay garantía de que Quantfury acepte este cliente ni de que la autorización
-sea estable: todavía hace falta una prueba real de extremo a extremo. El bot
+La autorización programada ya completó una consulta real y envió un mensaje
+desde GitHub Actions. Su renovación futura puede fallar. El bot
 solo llama a herramientas de lectura de cuenta y posiciones y nunca envía
 órdenes. Si la lectura falla, no envía avisos que aparenten tener datos de la
 cuenta. GitHub puede retrasar u omitir ejecuciones programadas, por lo que las
