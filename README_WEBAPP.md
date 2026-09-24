@@ -1,45 +1,20 @@
-# Trading Signal — Web-App móvil
+# XRP/USDT — aplicación Streamlit
 
-Web-app sencilla para consultar señales desde Android/iPhone sin instalar Python en el teléfono.
-
-## Qué verá el usuario
-1. Activo.
-2. Señal técnica alcista / bajista / esperar y revisión manual de riesgo.
-3. M15 tendencia, M5 confirmación, M1 entrada.
-4. No propone stop ni venta con beneficio sin datos suficientes de la posición.
-5. Detalle técnico oculto en "¿Por qué esta señal?".
-
-## Publicarla en Streamlit Community Cloud
-1. Crea un repositorio privado o público en GitHub.
-2. Sube todos los archivos de esta carpeta a la raíz del repositorio.
-3. En Streamlit Community Cloud crea una nueva app.
-4. Selecciona el repositorio y `app.py`.
-5. Despliega la app.
-6. Abre la URL resultante en Chrome/Safari del móvil.
-7. Android: menú ⋮ > "Añadir a pantalla de inicio".
-   iPhone: Compartir > "Añadir a pantalla de inicio".
-
-No introduzcas credenciales de Quantfury en esta app.
+La pantalla tiene un botón para consultar la cuenta Quantfury y las velas completadas de Binance Spot XRP/USDT. GitHub Actions ejecuta la consulta y envía el resultado a Telegram; la app no realiza operaciones ni muestra cifras introducidas a mano.
 
 ## Botón «Ejecutar todo ahora»
 
-La aplicación muestra un botón para abrir el workflow de GitHub. Si la web-app
-está publicada en Streamlit y configuras estos **secrets de Streamlit**,
-aparece además el botón directo, protegido por clave:
+En los secretos de Streamlit configura:
 
 ```toml
 GH_WORKFLOW_DISPATCH_TOKEN = "token fine-grained de GitHub"
 APP_ACTION_PASSWORD = "una clave larga y única"
 ```
 
-El token debe limitarse al repositorio `fjpereirag/trading-signal` y al
-permiso **Actions: write**. No uses el token de renovación de Quantfury en
-Streamlit. Tras pulsar, GitHub Actions realiza la consulta con sus secretos
-ya existentes; la confirmación de la web significa que GitHub aceptó el
-encargo, no que Telegram haya recibido el mensaje. Comprueba el resultado en
-la pestaña Actions. La app publicada debe tener acceso restringido, porque
-una clave de formulario por sí sola no sustituye la autenticación de GitHub.
+El token debe estar limitado al repositorio `fjpereirag/trading-signal` y contar con **Actions: write**. Es distinto del token `GH_SECRETS_PAT` guardado en GitHub para la renovación de Quantfury. El botón confirma que GitHub aceptó la solicitud; consulta el enlace «Ver estado de las consultas» para comprobar si terminó correctamente. La señal llegará a Telegram si se pudieron leer las fuentes y completar el análisis.
 
-## Nota
-La web-app es un asistente externo de análisis y no inicia, modifica ni cierra posiciones.
-Los precios de Yahoo Finance pueden retrasarse o diferir del precio ejecutable.
+La app publicada es accesible mediante URL. Protege el acceso de Streamlit cuando esté disponible; la clave del formulario protege el botón pero no sustituye una autenticación completa.
+
+## Uso
+
+Abre la app, introduce la clave y pulsa «Ejecutar todo ahora». Las operaciones de Quantfury se efectúan manualmente.
