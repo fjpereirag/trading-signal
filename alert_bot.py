@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 
 from market import get_timeframes
 from strategy_mobile import analyze
+from quantfury_account import snapshot, review_xrp
 
 
 TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -67,6 +68,14 @@ def main():
         return
 
     scheduled_report = os.environ.get("REPORT_SCHEDULE", "").lower() == "true"
+    account_context = None
+    if os.environ.get("QUANTFURY_ACCESS_TOKEN"):
+        try:
+            account, positions = snapshot()
+            account_context = (account, review_xrp(account, positions))
+        except Exception as exc:
+            # Never substitute the old manually entered figures for a failed live read.
+            raise RuntimeError("No se pudo verificar la cuenta Quantfury; avisos suspendidos") from exc
     if scheduled_report or os.environ.get("REPORT_TELEGRAM", "").lower() == "true":
         with open("config.json", "r", encoding="utf-8") as f:
             cfg = json.load(f)
@@ -94,10 +103,19 @@ def main():
             except Exception as exc:
                 print(f"Error consultando {name}: {exc}")
                 lines.append(f"{name}: datos no disponibles en esta consulta.")
-        lines.append(
-            "La cuenta de Quantfury no está conectada; sus cifras manuales pueden haber cambiado. "
-            "Sin órdenes ni recomendación automática."
-        )
+        if account_context:
+            account, review = account_context
+            lines.append(
+                f"Quantfury consultado ahora: saldo trading {account['balance']:.2f} "
+                f"{account['currency']}; poder disponible {account['availableTradingPower']:.2f} USD; "
+                f"exposición asignada {review['exposure_pct']:.1f}%."
+            )
+            lines.append(f"Posiciones XRP abiertas: {len(review['xrp'])}.")
+            if review["block_buys"]:
+                lines.append("Límite de exposición 30% alcanzado: compra bloqueada en el análisis.")
+        else:
+            lines.append("Cuenta Quantfury no conectada a GitHub; análisis técnico externo únicamente.")
+        lines.append("Sin órdenes; ejecución manual.")
         send_telegram("\n".join(lines))
         print("Seguimiento XRP enviado al chat configurado.")
         return
@@ -128,6 +146,8 @@ def main():
                 and now.minute % 15 < 5
             )
             if early_xrp:
+                if account_context and account_context[1]["block_buys"]:
+                    continue
                 send_telegram(
                     "🟡 TRADING SIGNAL V4 · AVISO PREVIO XRP\n"
                     f"{now:%d/%m/%Y %H:%M} UTC\n"
@@ -136,13 +156,17 @@ def main():
                     "M15 tendencia alcista + M5 confirmación: 2/3. "
                     "Falta el gatillo M1; no hay señal completa.\n"
                     f"Contexto: {result['context']} · zona: {result['zone']}.\n"
-                    "Consulta tu posición y el precio ejecutable en Quantfury. "
-                    "Cuenta no conectada; sin órdenes ni recomendación automática."
+                    "Consulta tu posición y el precio ejecutable en Quantfury. " +
+                    ("Cuenta Quantfury verificada; sin órdenes." if account_context
+                     else "Cuenta no conectada; sin órdenes ni recomendación automática.")
                 )
 
             # Solo avisamos cuando existe señal completa 3/3
             # y supera los filtros de calidad.
             if signal not in ("BUY", "SELL") or score != 3:
+                continue
+            if signal == "BUY" and account_context and account_context[1]["block_buys"]:
+                print("Compra XRP bloqueada por exposición de la cuenta Quantfury.")
                 continue
 
             price = float(result["price"])
@@ -157,8 +181,10 @@ def main():
                 f"Precio externo: {price:.4f}\n"
                 f"Reglas: {score}/3\n"
                 f"Calidad técnica: {quality}\n\n"
-                f"M15 tendencia + M5 confirmación + M1 gatillo. "
-                f"Sin datos de la cuenta ni órdenes en Quantfury."
+                f"M15 tendencia + M5 confirmación + M1 gatillo. " +
+                (f"Exposición Quantfury {account_context[1]['exposure_pct']:.1f}%. "
+                 if account_context else "Sin datos de la cuenta Quantfury. ")
+                + "Sin órdenes; ejecución manual."
             )
 
             send_telegram(message)
