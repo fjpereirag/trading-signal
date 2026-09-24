@@ -24,7 +24,7 @@ class SynchronizedAlertTests(unittest.TestCase):
                           "stopOrders": [{"price": 1.485}],
                           "targetOrders": []}], "block_buys": True}
         self.assertEqual(alert_bot.format_advice(result, review, {}),
-                         "1. Acción: Vender\\n2. SL: Ejecutar\\n3. Parcial: Venta total por SL")
+                         "1. Acción: Vender\n2. SL: Ejecutar\n3. Parcial: Venta total por SL")
 
     def test_breakout_requires_fifty_dollars_and_caps_partial(self):
         result = {"breakout": True, "signal": "WAIT"}
