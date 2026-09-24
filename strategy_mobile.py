@@ -437,6 +437,16 @@ def analyze(tfs, cfg):
         f"Accion={action}"
     )
 
+    # Confirmed breakout: last completed M15 close above the preceding 20
+    # completed highs, with a completed M5 close above its preceding 20 highs.
+    # These are external market candles; broker prices govern position decisions.
+    breakout = bool(
+        context_data["context"] == "ALCISTA"
+        and len(z["M15"]) >= 22 and len(z["M5"]) >= 22
+        and m15.Close > z["M15"]["High"].iloc[-21:-1].max()
+        and m5.Close > z["M5"]["High"].iloc[-21:-1].max()
+    )
+
     # --------------------------------------------------------
     # RESULTADO
     # --------------------------------------------------------
@@ -449,6 +459,7 @@ def analyze(tfs, cfg):
         "trend": trend,
         "confirm": bool(confirm),
         "trigger": bool(trigger),
+        "breakout": breakout,
         "filters": filters,
 
         "price": float(m1.Close),
