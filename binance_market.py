@@ -6,7 +6,7 @@ import pandas as pd
 import requests
 
 
-URL = "https://api.binance.com/api/v3/klines"
+URL = "https://data-api.binance.vision/api/v3/klines"
 
 
 def get_timeframes(symbol="XRPUSDT"):
