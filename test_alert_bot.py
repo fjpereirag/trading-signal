@@ -8,6 +8,23 @@ import alert_bot
 
 
 class SynchronizedAlertTests(unittest.TestCase):
+    def test_real_quantfury_stop_shape_is_read(self):
+        result = {"signal": "WAIT", "zone": "MEDIA", "pullback": "NO"}
+        review = {"xrp": [{"direction": "Long", "lastPrice": 1.53,
+                          "stopOrders": [{"price": 1.485}],
+                          "targetOrders": [{"price": 1.565}]}], "block_buys": True}
+        text = alert_bot.format_advice(result, review, {})
+        self.assertEqual(len(text.splitlines()), 3)
+        self.assertIn("SL: Mantener", text)
+        self.assertIn("Parcial: No actuar", text)
+
+    def test_stop_touch_requests_broker_check(self):
+        result = {"signal": "WAIT", "zone": "MEDIA", "pullback": "NO"}
+        review = {"xrp": [{"direction": "Long", "lastPrice": 1.48,
+                          "stopOrders": [{"price": 1.485}],
+                          "targetOrders": []}], "block_buys": True}
+        self.assertIn("Revisar ejecución", alert_bot.format_advice(result, review, {}))
+
     @patch.dict("os.environ", {"QUANTFURY_ACCESS_TOKEN": "", "QUANTFURY_CLIENT_ID": "", "QUANTFURY_REFRESH_TOKEN": ""})
     @patch("alert_bot.send_telegram")
     def test_no_quantfury_auth_blocks_telegram(self, send):
