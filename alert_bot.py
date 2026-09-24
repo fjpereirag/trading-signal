@@ -23,46 +23,63 @@ def send_telegram(message):
     response.raise_for_status()
 
 
+def _number(value, label):
+    """Reject absent, malformed and nonfinite broker fields."""
+    import math
+    try:
+        number = float(value)
+    except (ValueError, TypeError):
+        raise RuntimeError(f"{label} no verificable") from None
+    if not math.isfinite(number):
+        raise RuntimeError(f"{label} no verificable")
+    return number
+
+
 def format_advice(result, review, account):
-    """Never infer SL, partial size or profit from absent position fields."""
+    """Three lines based on live Quantfury positions and confirmed market bars."""
     positions = review["xrp"]
-    action = "Esperar"
-    if (result["signal"] == "BUY" and result["zone"] in ("BAJA", "PROFUNDA")
-            and result["pullback"] == "REAL" and not review["block_buys"]):
+    if len(positions) != 1:
+        raise RuntimeError("Se necesita una sola posición XRP con SL verificable")
+    position = positions[0]
+    if position.get("direction") != "Long":
+        raise RuntimeError("Solo se admiten posiciones XRP largas")
+    price = _number(position.get("lastPrice"), "Precio Quantfury")
+    quantity = _number(position.get("quantity"), "Cantidad XRP")
+    if price <= 0 or quantity <= 0:
+        raise RuntimeError("Posición XRP inválida")
+    stops = position.get("stopOrders")
+    if not isinstance(stops, list) or not stops:
+        raise RuntimeError("Posición XRP sin SL verificable")
+    levels = [_number(stop.get("price"), "SL XRP") for stop in stops]
+    if any(level <= 0 for level in levels):
+        raise RuntimeError("SL XRP inválido")
+    stop = max(levels)
+    action, sl, partial = "Esperar", "Mantener", "No actuar"
+    if price <= stop:
+        action, sl, partial = "Vender", "Ejecutar", "Venta total por SL"
+    elif result.get("breakout"):
+        pnl = _number(position.get("unrealizedPnlSystem"), "Beneficio XRP")
+        if pnl >= 50:
+            sale = quantity * 0.25
+            action, sl = "Vender", "Subir"
+            partial = f"Venta parcial de {sale:.4f} XRP en {price:.4f} USD"
+    elif (
+        result.get("signal") == "BUY"
+        and result.get("context") == "ALCISTA"
+        and result.get("zone") in ("BAJA", "PROFUNDA")
+        and result.get("pullback") in ("REAL", "PROFUNDO")
+        and not review["block_buys"]
+    ):
         action = "Comprar"
-    sl = "Mantener"
-    for position in positions:
-        price = position.get("lastPrice")
-        stops = position.get("stopOrders")
-        direction = position.get("direction")
-        if price is None or stops is None or direction not in ("Long", "Short"):
-            raise RuntimeError("Posición XRP sin precio, dirección o SL verificables")
-        if not stops:
-            sl = "Revisar: posición sin SL"
-            action = "Esperar"
-            continue
-        for stop in stops:
-            level = stop.get("price")
-            if level is None:
-                raise RuntimeError("SL XRP sin nivel verificable")
-            if (direction == "Long" and price <= level) or (
-                direction == "Short" and price >= level
-            ):
-                sl = f"Revisar ejecución en Quantfury ({level:.4f})"
-                action = "Esperar"
-        if position.get("targetOrders") is None:
-            raise RuntimeError("Objetivos XRP no verificables")
+        if result["zone"] == "PROFUNDA":
+            partial = "Compra parcial"
     return "\n".join((
         f"1. Acción: {action}",
         f"2. SL: {sl}",
-        "3. Parcial: No actuar",
+        f"3. Parcial: {partial}",
     ))
 
-
 def main():
-    if os.environ.get("TEST_TELEGRAM", "").lower() == "true":
-        send_telegram("Prueba de Telegram. Sin operaciones.")
-        return
     if not (os.environ.get("QUANTFURY_ACCESS_TOKEN") or (
         os.environ.get("QUANTFURY_CLIENT_ID") and os.environ.get("QUANTFURY_REFRESH_TOKEN")
     )):
@@ -76,7 +93,7 @@ def main():
         raise RuntimeError("Precio de Binance desactualizado: indicaciones suspendidas")
     with open("config.json", encoding="utf-8") as handle:
         result = analyze(tfs, json.load(handle))
-    send_telegram(f"XRP/USDT · {now:%d/%m/%Y %H:%M} UTC\n" + format_advice(result, review, account))
+    send_telegram(format_advice(result, review, account))
 
 
 if __name__ == "__main__":
