@@ -1,7 +1,7 @@
 import os
 import json
 import requests
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 
 from market import get_timeframes
@@ -11,14 +11,16 @@ from strategy_mobile import analyze
 TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-ASSETS = {
-    "XRP": "XRP-USD",
-    "Bitcoin": "BTC-USD",
-    "Ethereum": "ETH-USD",
-    "EUR/USD": "EURUSD=X",
-    "Apple": "AAPL",
-    "Microsoft": "MSFT",
-}
+ASSETS = {"XRP": "XRP-USD"}
+
+
+def fresh_market_data(tfs, now):
+    """Reject old or future Yahoo candles before sending any market alert."""
+    last = tfs["M1"].index[-1]
+    if last.tzinfo is None:
+        raise ValueError("La vela M1 no tiene zona horaria verificable.")
+    age = now - last.to_pydatetime().astimezone(timezone.utc)
+    return timedelta(minutes=-2) <= age <= timedelta(minutes=10)
 
 
 def send_telegram(message):
@@ -56,9 +58,13 @@ def main():
             datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC"),
             "Precios externos de Yahoo Finance; no son precios ejecutables en Quantfury.",
         ]
-        for name, ticker in (("XRP", "XRP-USD"), ("BTC", "BTC-USD")):
+        for name, ticker in ASSETS.items():
             try:
-                result = analyze(get_timeframes(ticker), cfg)
+                tfs = get_timeframes(ticker)
+                if not fresh_market_data(tfs, datetime.now(timezone.utc)):
+                    lines.append(f"{name}: datos externos desactualizados; sin señal.")
+                    continue
+                result = analyze(tfs, cfg)
                 lines.append(
                     f"{name}: {result['price']:.4f} USD · "
                     f"contexto {result['context']} · zona {result['zone']} · "
@@ -82,6 +88,10 @@ def main():
     for name, ticker in ASSETS.items():
         try:
             tfs = get_timeframes(ticker)
+            now = datetime.now(timezone.utc)
+            if not fresh_market_data(tfs, now):
+                print(f"{name}: vela M1 desactualizada; aviso omitido.")
+                continue
             result = analyze(tfs, cfg)
 
             signal = result.get("signal", "WAIT")
@@ -90,10 +100,8 @@ def main():
 
             # XRP: aviso previo cuando M15 y M5 coinciden, antes del gatillo M1.
             # Una ventana de cinco minutos por cuarto de hora limita repeticiones.
-            now = datetime.now(timezone.utc)
             early_xrp = (
-                name == "XRP"
-                and result.get("trend") == "BUY"
+                result.get("trend") == "BUY"
                 and result.get("confirm")
                 and not result.get("trigger")
                 and score == 2
@@ -116,12 +124,7 @@ def main():
             if signal not in ("BUY", "SELL") or score != 3:
                 continue
 
-            price = float(
-                result.get(
-                    "price",
-                    tfs["M1"]["Close"].iloc[-1]
-                )
-            )
+            price = float(result["price"])
 
             action = "🟢 Señal técnica alcista" if signal == "BUY" else "🔴 Señal técnica bajista"
 
