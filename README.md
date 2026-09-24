@@ -8,13 +8,13 @@ la consulta de cuenta falla o la última vela supera tres minutos, no se envía
 ninguna indicación. No se conserva un saldo manual entre ejecuciones: después
 de operar en Quantfury, la ejecución siguiente vuelve a leer la cuenta.
 
-El mensaje contiene tres líneas (Acción, SL, Parcial) y un contexto de precio,
-saldo y exposición. Comprar exige señal técnica, retroceso en zona de valor y
+El mensaje contiene exactamente tres líneas (Acción, SL, Parcial). Comprar exige
+señal técnica, retroceso en zona de valor y
 exposición inferior al 30%. La venta con beneficio, el tamaño parcial y la
-subida del SL aún no se automatizan: no se han verificado en la respuesta MCP
-los datos necesarios ni las condiciones de ruptura. Si el precio externo se
-acerca a un SL, el mensaje pide comprobarlo en Quantfury; Binance no demuestra
-que se haya ejecutado allí. GitHub Actions se puede retrasar: este bot no
+subida del SL aún no se automatizan: faltan condiciones de ruptura y cantidades
+parciales acordadas. La posición MCP sí devuelve su precio, sus stops activos y
+sus objetivos parciales. Si el precio de Quantfury toca un SL, el mensaje pide
+comprobar la ejecución en la plataforma. GitHub Actions se puede retrasar: este bot no
 sustituye los stops puestos en la plataforma.
 
 La consulta programada de Quantfury ya funcionó en GitHub Actions el
