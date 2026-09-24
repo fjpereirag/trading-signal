@@ -1,26 +1,13 @@
-"""XRP/USDT alerts; Quantfury operations remain manual."""
+"""Read-only XRP/USDT review; Quantfury operations remain manual."""
 
 import json
 import os
 from datetime import datetime, timedelta, timezone
 
-import requests
-
 from binance_market import get_timeframes
 from quantfury_account import review_xrp, snapshot
 from strategy_mobile import analyze
-
-
-def send_telegram(message):
-    token = os.environ.get("TELEGRAM_BOT_TOKEN")
-    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
-    if not token or not chat_id:
-        raise RuntimeError("Faltan credenciales de Telegram")
-    response = requests.post(
-        f"https://api.telegram.org/bot{token}/sendMessage",
-        data={"chat_id": chat_id, "text": message}, timeout=15,
-    )
-    response.raise_for_status()
+from result_codec import seal
 
 
 def _number(value, label):
@@ -84,6 +71,10 @@ def main():
         os.environ.get("QUANTFURY_CLIENT_ID") and os.environ.get("QUANTFURY_REFRESH_TOKEN")
     )):
         raise RuntimeError("Cuenta Quantfury sin autorización: indicaciones suspendidas")
+    password = os.environ.get("APP_RESULT_PASSWORD", "")
+    request_id = os.environ.get("REQUEST_ID", "")
+    if len(password) < 20 or len(request_id) != 32 or any(c not in "0123456789abcdef" for c in request_id):
+        raise RuntimeError("Falta configurar la clave del resultado o el identificador de la consulta")
     account, positions = snapshot()
     review = review_xrp(account, positions)
     tfs = get_timeframes()
@@ -93,7 +84,11 @@ def main():
         raise RuntimeError("Precio de Binance desactualizado: indicaciones suspendidas")
     with open("config.json", encoding="utf-8") as handle:
         result = analyze(tfs, json.load(handle))
-    send_telegram(format_advice(result, review, account))
+    advice = format_advice(result, review, account)
+    first, second, third = advice.splitlines()
+    dated = f"{first} · {now:%d/%m/%Y %H:%M} UTC\n{second}\n{third}"
+    with open("result.json.enc", "wb") as handle:
+        handle.write(seal(dated, password))
 
 
 if __name__ == "__main__":
