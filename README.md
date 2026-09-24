@@ -54,7 +54,7 @@ una autorización OAuth independiente, en tu propio ordenador con Python 3.11+
 y GitHub CLI instalado y autenticado (`gh auth login`), ejecuta:
 
 ```powershell
-py -m pip install -r requirements.txt
+py -m pip install requests
 py connect_quantfury.py
 ```
 
