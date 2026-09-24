@@ -1,21 +1,13 @@
 name: Trading Signal Alerts
+run-name: Consulta XRP/USDT ${{ inputs.request_id }}
 
 on:
-  schedule:
-    - cron: "*/5 * * * *"
-    - cron: "17,47 * * * *"
   workflow_dispatch:
     inputs:
-      test_telegram:
-        description: "Enviar un único mensaje de prueba al chat configurado"
-        type: boolean
-        required: false
-        default: false
-      report_telegram:
-        description: "Enviar un único resumen de mercado externo V4"
-        type: boolean
-        required: false
-        default: false
+      request_id:
+        description: "Identificador de la consulta cifrada"
+        type: string
+        required: true
 
 jobs:
   check-signal:
@@ -24,31 +16,29 @@ jobs:
     concurrency:
       group: trading-signal-alerts
       cancel-in-progress: false
-
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@v4
-
       - name: Instalar Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
       - name: Instalar dependencias
         run: pip install -r requirements.txt
-
-      - name: Comprobar reglas de cuenta
-        run: python -m unittest test_quantfury_account.py test_alert_bot.py test_run_now.py
-
-      - name: Comprobar señal
+      - name: Comprobar reglas de cuenta y cifrado
+        run: python -m unittest test_quantfury_account.py test_alert_bot.py test_run_now.py test_result_codec.py
+      - name: Consultar y cifrar resultado
         env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          QUANTFURY_ACCESS_TOKEN: ${{ secrets.QUANTFURY_ACCESS_TOKEN }}
           QUANTFURY_CLIENT_ID: ${{ secrets.QUANTFURY_CLIENT_ID }}
           QUANTFURY_REFRESH_TOKEN: ${{ secrets.QUANTFURY_REFRESH_TOKEN }}
           GH_SECRETS_PAT: ${{ secrets.GH_SECRETS_PAT }}
-          TEST_TELEGRAM: ${{ inputs.test_telegram }}
-          REPORT_TELEGRAM: ${{ inputs.report_telegram }}
-          REPORT_SCHEDULE: ${{ github.event.schedule == '17,47 * * * *' }}
+          APP_RESULT_PASSWORD: ${{ secrets.APP_RESULT_PASSWORD }}
+          REQUEST_ID: ${{ inputs.request_id }}
         run: python alert_bot.py
+      - name: Guardar resultado cifrado un día
+        uses: actions/upload-artifact@v4
+        with:
+          name: signal-${{ inputs.request_id }}
+          path: result.json.enc
+          retention-days: 1
+          if-no-files-found: error
