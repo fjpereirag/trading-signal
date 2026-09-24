@@ -190,7 +190,7 @@ def main():
             send_telegram(message)
 
         except Exception as e:
-            print(f"Error comprobando {name}: {e}")
+            raise RuntimeError(f"Error comprobando o notificando {name}") from e
 
 
 if __name__ == "__main__":
