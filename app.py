@@ -44,8 +44,18 @@ else:
             return
         try:
             state, message, url = check_result(token, st.session_state.request_id, password)
-        except (requests.RequestException, ValueError, zipfile.BadZipFile, CryptoError):
-            st.error("No se pudo leer el resultado de GitHub. Revisa que APP_RESULT_PASSWORD tenga la misma clave que Streamlit.")
+        except CryptoError:
+            st.error("La clave de APP_RESULT_PASSWORD en GitHub no coincide con APP_ACTION_PASSWORD en Streamlit.")
+            return
+        except requests.HTTPError as error:
+            status = error.response.status_code if error.response is not None else "desconocido"
+            st.error(f"GitHub impidió leer el resultado (HTTP {status}). Comprueba que el token de Streamlit tenga Actions: read and write.")
+            return
+        except requests.RequestException:
+            st.error("No se pudo conectar con GitHub para recuperar el resultado. Vuelve a intentarlo.")
+            return
+        except (ValueError, zipfile.BadZipFile):
+            st.error("El archivo de resultado recibido no tiene el formato esperado.")
             return
         if state == "pending":
             st.info(message)
