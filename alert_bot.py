@@ -69,7 +69,9 @@ def main():
 
     scheduled_report = os.environ.get("REPORT_SCHEDULE", "").lower() == "true"
     account_context = None
-    if os.environ.get("QUANTFURY_ACCESS_TOKEN"):
+    if os.environ.get("QUANTFURY_ACCESS_TOKEN") or (
+        os.environ.get("QUANTFURY_CLIENT_ID") and os.environ.get("QUANTFURY_REFRESH_TOKEN")
+    ):
         try:
             account, positions = snapshot()
             account_context = (account, review_xrp(account, positions))
