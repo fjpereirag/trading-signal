@@ -37,6 +37,9 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
+      - name: Comprobar reglas de cuenta
+        run: python -m unittest test_quantfury_account.py
+
       - name: Comprobar señal
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
