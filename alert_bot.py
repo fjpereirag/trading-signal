@@ -26,26 +26,36 @@ def send_telegram(message):
 def format_advice(result, review, account):
     """Never infer SL, partial size or profit from absent position fields."""
     positions = review["xrp"]
-    price = result["price"]
     action = "Esperar"
     if (result["signal"] == "BUY" and result["zone"] in ("BAJA", "PROFUNDA")
             and result["pullback"] == "REAL" and not review["block_buys"]):
         action = "Comprar"
-    stops = [p.get("stopLossPrice") for p in positions]
-    valid_stops = [float(x) for x in stops if x is not None]
     sl = "Mantener"
-    # Binance's quote cannot prove that a stop was touched at Quantfury.
-    if any(price <= stop for stop in valid_stops):
-        sl = "Revisar en Quantfury"
-    if positions and len(valid_stops) != len(positions):
-        sl = "Sin verificar"
-        action = "Esperar"
+    for position in positions:
+        price = position.get("lastPrice")
+        stops = position.get("stopOrders")
+        direction = position.get("direction")
+        if price is None or stops is None or direction not in ("Long", "Short"):
+            raise RuntimeError("Posición XRP sin precio, dirección o SL verificables")
+        if not stops:
+            sl = "Revisar: posición sin SL"
+            action = "Esperar"
+            continue
+        for stop in stops:
+            level = stop.get("price")
+            if level is None:
+                raise RuntimeError("SL XRP sin nivel verificable")
+            if (direction == "Long" and price <= level) or (
+                direction == "Short" and price >= level
+            ):
+                sl = f"Revisar ejecución en Quantfury ({level:.4f})"
+                action = "Esperar"
+        if position.get("targetOrders") is None:
+            raise RuntimeError("Objetivos XRP no verificables")
     return "\n".join((
         f"1. Acción: {action}",
         f"2. SL: {sl}",
         "3. Parcial: No actuar",
-        f"Binance XRP/USDT: {price:.4f} USDT · Quantfury: {account['balance']} {account['currency']} · exposición: {review['exposure_pct']:.1f}%",
-        "Acciones manuales en Quantfury. Parciales y subida de SL pendientes de datos y reglas verificables.",
     ))
 
 
