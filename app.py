@@ -1,46 +1,60 @@
-"""One-click read-only XRP/USDT review through GitHub Actions."""
+"""Streamlit interface for a synchronized, read-only XRP/USDT review."""
 
 import hmac
+import zipfile
 
 import requests
 import streamlit as st
+from nacl.exceptions import CryptoError
 
-from run_now import dispatch
+from run_now import check_result, dispatch
 
 
 st.set_page_config(page_title="XRP/USDT · Consulta", page_icon="📊", layout="centered")
 st.title("📊 Consulta XRP/USDT")
-st.write("Consulta la cuenta de Quantfury y el mercado de Binance. Recibirás el resultado en Telegram.")
+st.write("Consulta tu cuenta de Quantfury y las velas de Binance. El resultado aparecerá aquí.")
 st.caption("La consulta no compra, vende ni mueve fondos. Las operaciones se realizan manualmente.")
 
 try:
-    dispatch_token = st.secrets.get("GH_WORKFLOW_DISPATCH_TOKEN", "")
-    access_password = st.secrets.get("APP_ACTION_PASSWORD", "")
+    token = st.secrets.get("GH_WORKFLOW_DISPATCH_TOKEN", "")
+    password = st.secrets.get("APP_ACTION_PASSWORD", "")
 except FileNotFoundError:
-    dispatch_token = access_password = ""
+    token = password = ""
 
-if dispatch_token and access_password:
-    entered_password = st.text_input("Clave para ejecutar la consulta", type="password")
+if not token or not password:
+    st.error("Falta configurar la clave y el token de GitHub en Streamlit.")
+else:
+    entered = st.text_input("Clave para ejecutar la consulta", type="password")
     if st.button("▶️ Ejecutar todo ahora", use_container_width=True):
-        if not hmac.compare_digest(entered_password, access_password):
+        if not hmac.compare_digest(entered, password):
             st.error("Clave incorrecta.")
         else:
             try:
-                dispatch(dispatch_token)
-            except requests.RequestException:
-                st.error("GitHub no aceptó la solicitud. Comprueba el token de Streamlit y su permiso Actions: write.")
-            else:
-                st.success("Consulta iniciada. Comprueba Telegram al finalizar la ejecución.")
-else:
-    st.warning("Falta configurar el botón directo en los secretos de Streamlit.")
-    st.link_button(
-        "Abrir ejecución manual en GitHub",
-        "https://github.com/fjpereirag/trading-signal/actions/workflows/main.yml",
-        use_container_width=True,
-    )
+                st.session_state.request_id = dispatch(token)
+                st.session_state.result = None
+            except (requests.RequestException, RuntimeError):
+                st.error("GitHub no aceptó la consulta. Comprueba el permiso Actions: write del token.")
 
-st.link_button(
-    "Ver estado de las consultas",
-    "https://github.com/fjpereirag/trading-signal/actions/workflows/main.yml",
-    use_container_width=True,
-)
+    @st.fragment(run_every="5s")
+    def show_result():
+        if not st.session_state.get("request_id"):
+            return
+        if st.session_state.get("result") is not None:
+            st.text(st.session_state.result)
+            return
+        try:
+            state, message, url = check_result(token, st.session_state.request_id, password)
+        except (requests.RequestException, ValueError, zipfile.BadZipFile, CryptoError):
+            st.error("No se pudo leer el resultado de GitHub. Revisa que APP_RESULT_PASSWORD tenga la misma clave que Streamlit.")
+            return
+        if state == "pending":
+            st.info(message)
+        elif state == "failed":
+            st.error(message)
+        else:
+            st.session_state.result = message
+            st.text(message)
+        if url:
+            st.link_button("Ver esta ejecución en GitHub", url)
+
+    show_result()
