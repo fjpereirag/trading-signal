@@ -2,6 +2,7 @@ import os
 import json
 import requests
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 
 from market import get_timeframes
@@ -14,13 +15,28 @@ CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 ASSETS = {"XRP": "XRP-USD"}
 
 
-def fresh_market_data(tfs, now):
-    """Reject old or future Yahoo candles before sending any market alert."""
+def candle_time(tfs):
+    """Return the actual timestamp of the latest Yahoo one-minute candle."""
     last = tfs["M1"].index[-1]
     if last.tzinfo is None:
         raise ValueError("La vela M1 no tiene zona horaria verificable.")
-    age = now - last.to_pydatetime().astimezone(timezone.utc)
+    return last.to_pydatetime().astimezone(timezone.utc)
+
+
+def fresh_market_data(tfs, now):
+    """Reject old or future Yahoo candles before sending any market alert."""
+    age = now - candle_time(tfs)
     return timedelta(minutes=-2) <= age <= timedelta(minutes=10)
+
+
+def data_time_label(tfs, now):
+    observed = candle_time(tfs)
+    local = observed.astimezone(ZoneInfo("Europe/Madrid"))
+    age_minutes = max(0, int((now - observed).total_seconds() // 60))
+    return (
+        f"Vela Yahoo M1: {observed:%d/%m/%Y %H:%M} UTC "
+        f"({local:%H:%M} Madrid); antigüedad {age_minutes} min"
+    )
 
 
 def send_telegram(message):
@@ -57,13 +73,15 @@ def main():
         lines = [
             "📊 Trading Signal V4 · seguimiento de prueba XRP" if scheduled_report
             else "📊 Trading Signal V4 · consulta puntual XRP",
-            datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC"),
+            "Enviado: " + datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC"),
             "Precios externos de Yahoo Finance; no son precios ejecutables en Quantfury.",
         ]
         for name, ticker in ASSETS.items():
             try:
                 tfs = get_timeframes(ticker)
-                if not fresh_market_data(tfs, datetime.now(timezone.utc)):
+                now = datetime.now(timezone.utc)
+                lines.append(data_time_label(tfs, now))
+                if not fresh_market_data(tfs, now):
                     lines.append(f"{name}: datos externos desactualizados; sin señal.")
                     continue
                 result = analyze(tfs, cfg)
@@ -113,6 +131,7 @@ def main():
                 send_telegram(
                     "🟡 TRADING SIGNAL V4 · AVISO PREVIO XRP\n"
                     f"{now:%d/%m/%Y %H:%M} UTC\n"
+                    f"{data_time_label(tfs, now)}\n"
                     f"Precio externo: {result['price']:.4f} USD\n"
                     "M15 tendencia alcista + M5 confirmación: 2/3. "
                     "Falta el gatillo M1; no hay señal completa.\n"
@@ -134,6 +153,7 @@ def main():
                 f"📈 TRADING SIGNAL V4 · SIMULACIÓN\n\n"
                 f"{action}\n"
                 f"Activo: {name}\n"
+                f"{data_time_label(tfs, now)}\n"
                 f"Precio externo: {price:.4f}\n"
                 f"Reglas: {score}/3\n"
                 f"Calidad técnica: {quality}\n\n"
