@@ -67,7 +67,7 @@ La autorización de ChatGPT no entrega un token a GitHub Actions. Para que la
 consulta sea permanente hace falta un método OAuth de Quantfury para ejecución
 desatendida: un access token temporal caducará. No copies la sesión, cookies
 ni credenciales de ChatGPT al repositorio. Hasta configurar esa autenticación,
-los avisos siguen siendo técnicos y externos. Nunca se envían órdenes.
+los avisos quedan suspendidos. Nunca se envían órdenes.
 
 ## Conexión programada de Quantfury (experimental)
 
