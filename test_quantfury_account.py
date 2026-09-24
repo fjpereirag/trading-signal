@@ -8,7 +8,7 @@ class AccountAlertTests(unittest.TestCase):
     def test_exposure_includes_positions_and_active_orders(self):
         result = review_xrp(
             {"tradingPower": 6000, "availableTradingPower": 2080.48},
-            [{"shortNameDisplay": "XRP", "quantity": 10}],
+            [{"shortNameDisplay": "XRP/USDT", "quantity": 10}],
         )
         self.assertAlmostEqual(result["exposure_pct"], 65.3253333333)
         self.assertTrue(result["block_buys"])
