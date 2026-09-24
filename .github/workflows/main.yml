@@ -3,6 +3,7 @@ name: Trading Signal Alerts
 on:
   schedule:
     - cron: "*/5 * * * *"
+    - cron: "17,47 * * * *"
   workflow_dispatch:
     inputs:
       test_telegram:
@@ -38,4 +39,5 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TEST_TELEGRAM: ${{ inputs.test_telegram }}
           REPORT_TELEGRAM: ${{ inputs.report_telegram }}
+          REPORT_SCHEDULE: ${{ github.event.schedule == '17,47 * * * *' }}
         run: python alert_bot.py
