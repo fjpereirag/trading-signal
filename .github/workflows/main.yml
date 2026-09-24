@@ -38,7 +38,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Comprobar reglas de cuenta
-        run: python -m unittest test_quantfury_account.py
+        run: python -m unittest test_quantfury_account.py test_alert_bot.py
 
       - name: Comprobar señal
         env:
