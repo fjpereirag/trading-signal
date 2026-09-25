@@ -81,8 +81,14 @@ def main():
     now = datetime.now(timezone.utc)
     plans = []
     for symbol, level, kind, decimals in PLANS:
-        close, observed = candles(symbol, now)
-        plans.append(evaluate(symbol, level, kind, decimals, close, observed, power, positions))
+        try:
+            close, observed = candles(symbol, now)
+            plans.append(evaluate(symbol, level, kind, decimals, close, observed, power, positions))
+        except (RuntimeError, requests.RequestException, ValueError, KeyError):
+            plans.append({"asset": symbol.replace("USDT", ""), "kind": kind,
+                          "reference": level, "price": None, "observed": None,
+                          "status": "Datos no disponibles; señal bloqueada", "quantity": None,
+                          "exposure": None, "target_move": None, "ready": False})
     result = {"type": "opportunities-v1", "generated": now.isoformat(),
               "balance": balance, "currency": account["currency"],
               "power": power, "positions": len(positions), "target": TARGET,
