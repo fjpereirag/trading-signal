@@ -24,7 +24,7 @@ def dispatch(token):
     request_id = uuid.uuid4().hex
     response = requests.post(
         f"{API}/actions/workflows/{WORKFLOW}/dispatches",
-        headers=_headers(token), json={"ref": "main", "inputs": {"request_id": request_id}}, timeout=15,
+        headers=_headers(token), json={"ref": "main", "inputs": {"request_id": request_id, "mode": "opportunities"}}, timeout=15,
     )
     response.raise_for_status()
     if response.status_code != 204:
