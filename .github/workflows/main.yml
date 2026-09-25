@@ -8,6 +8,13 @@ on:
         description: "Identificador de la consulta cifrada"
         type: string
         required: true
+      mode:
+        description: "opportunities or legacy XRP review"
+        type: choice
+        options:
+          - opportunities
+          - xrp
+        default: opportunities
 
 jobs:
   check-signal:
@@ -26,7 +33,7 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt
       - name: Comprobar reglas de cuenta y cifrado
-        run: python -m unittest test_quantfury_account.py test_alert_bot.py test_run_now.py test_result_codec.py
+        run: python -m unittest test_quantfury_account.py test_alert_bot.py test_run_now.py test_result_codec.py test_opportunity_bot.py
       - name: Consultar y cifrar resultado
         env:
           QUANTFURY_CLIENT_ID: ${{ secrets.QUANTFURY_CLIENT_ID }}
@@ -34,7 +41,12 @@ jobs:
           GH_SECRETS_PAT: ${{ secrets.GH_SECRETS_PAT }}
           APP_RESULT_PASSWORD: ${{ secrets.APP_RESULT_PASSWORD }}
           REQUEST_ID: ${{ inputs.request_id }}
-        run: python alert_bot.py
+        run: |
+          if [ "${{ inputs.mode }}" = "xrp" ]; then
+            python alert_bot.py
+          else
+            python opportunity_bot.py
+          fi
       - name: Guardar resultado cifrado un día
         uses: actions/upload-artifact@v4
         with:
