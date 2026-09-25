@@ -11,7 +11,7 @@ class RunNowTests(unittest.TestCase):
         first, second = dispatch("test-token"), dispatch("test-token")
         self.assertEqual(len(first), 32)
         self.assertNotEqual(first, second)
-        self.assertEqual(post.call_args.kwargs["json"]["inputs"], {"request_id": second})
+        self.assertEqual(post.call_args.kwargs["json"]["inputs"], {"request_id": second, "mode": "opportunities"})
 
     @patch("run_now.requests.get")
     def test_ignores_other_users_runs(self, get):
